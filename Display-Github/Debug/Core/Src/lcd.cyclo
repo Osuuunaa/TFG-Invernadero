@@ -1,0 +1,7 @@
+../Core/Src/lcd.c:8:6:LCD_Init	1
+../Core/Src/lcd.c:18:6:LCD_SendCommand	1
+../Core/Src/lcd.c:22:6:LCD_SendData	1
+../Core/Src/lcd.c:26:6:LCD_Print	2
+../Core/Src/lcd.c:33:6:LCD_SetCursor	2
+../Core/Src/lcd.c:38:13:LCD_EnablePulse	1
+../Core/Src/lcd.c:45:13:LCD_Send	1

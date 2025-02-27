@@ -37,6 +37,17 @@
 
 // Comando para iniciar la medición
 #define SHT85_CMD_MEASURE_HIGHREP 0x2400
+
+// DISPLAY INICIO
+#define RS_PIN  GPIO_PIN_0
+#define E_PIN   GPIO_PIN_1
+#define D4_PIN  GPIO_PIN_2
+#define D5_PIN  GPIO_PIN_3
+#define D6_PIN  GPIO_PIN_4
+#define D7_PIN  GPIO_PIN_5
+#define LCD_PORT GPIOA
+// DISPLAY FINAL
+
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -79,6 +90,15 @@ float averageTemperature = 0.0f;
 volatile uint8_t sampleCount = 0;
 // SENSOR SHT85 TEMPERATURA FIN
 
+// DISPLAY INICIO
+// Variables para depuración en Live Expressions
+uint8_t lastSentCommand = 0;  // Último comando enviado
+uint8_t lastSentChar = 0;     // Último carácter enviado
+uint8_t lastSent4Bits = 0;    // Últimos 4 bits enviados
+
+
+// DISPLAY FINAL
+
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -93,10 +113,213 @@ bool setAlarm(float temp);
 void calculatorAverageTemperature(float newTemperature);
 // SENSOR SHT85 TEMPERATURA FIN
 
+
+// DISPLAY INICIO
+/*void LCD_PulseEnable(void) {
+    HAL_GPIO_WritePin(LCD_PORT, E_PIN, GPIO_PIN_SET);
+    HAL_Delay(1000);
+    HAL_GPIO_WritePin(LCD_PORT, E_PIN, GPIO_PIN_RESET);
+    HAL_Delay(1000);
+}
+
+void LCD_Send4Bits(uint8_t data) {
+    lastSent4Bits = data; // Guardar valor para depuración
+    HAL_GPIO_WritePin(LCD_PORT, D4_PIN, (data >> 0) & 0x01);
+    HAL_GPIO_WritePin(LCD_PORT, D5_PIN, (data >> 1) & 0x01);
+    HAL_GPIO_WritePin(LCD_PORT, D6_PIN, (data >> 2) & 0x01);
+    HAL_GPIO_WritePin(LCD_PORT, D7_PIN, (data >> 3) & 0x01);
+    LCD_PulseEnable();
+}*/
+
+void send_to_lcd(char data, int rs)
+{
+    HAL_GPIO_WritePin(LCD_PORT, RS_PIN, rs); // rs = 1 para datos, rs = 0 para comandos
+
+    /* Escribir los datos en los pines respectivos */
+    HAL_GPIO_WritePin(LCD_PORT, D4_PIN, (data >> 0) & 0x01);
+	HAL_GPIO_WritePin(LCD_PORT, D5_PIN, (data >> 1) & 0x01);
+	HAL_GPIO_WritePin(LCD_PORT, D6_PIN, (data >> 2) & 0x01);
+	HAL_GPIO_WritePin(LCD_PORT, D7_PIN, (data >> 3) & 0x01);
+
+
+    // Si el LCD no funciona, aumentar el retardo a 50, 80
+	HAL_GPIO_WritePin(LCD_PORT, E_PIN, GPIO_PIN_SET);
+	HAL_Delay(50);
+	HAL_GPIO_WritePin(LCD_PORT, E_PIN, GPIO_PIN_RESET);
+	HAL_Delay(50);
+
+	lastSent4Bits = data; // Guardar valor para depuración
+}
+
+
+
+/*
+void LCD_SendCommand(uint8_t cmd) {
+    lastSentCommand = cmd; // Guardar último comando para depuración
+    HAL_GPIO_WritePin(LCD_PORT, RS_PIN, GPIO_PIN_RESET); // RS = 0 (Comando)
+    LCD_Send4Bits(cmd >> 4); // Parte alta
+    LCD_Send4Bits(cmd);      // Parte baja
+    HAL_Delay(20); // Esperar mínimo 39µs según datasheet
+}
+*/
+
+void lcd_send_cmd(char cmd)
+{
+    char datatosend;
+
+    /* Enviar primero el nibble superior */
+    datatosend = ((cmd >> 4) & 0x0F);
+    send_to_lcd(datatosend, 0); // RS debe estar en 0 al enviar un comando
+
+    /* Enviar el nibble inferior */
+    datatosend = (cmd & 0x0F);
+    send_to_lcd(datatosend, 0);
+}
+
+
+void lcd_send_data(char data)
+{
+    char datatosend;
+
+    /* Enviar el nibble superior */
+    datatosend = ((data >> 4) & 0x0F);
+    send_to_lcd(datatosend, 1); // rs = 1 para enviar datos
+
+    /* Enviar el nibble inferior */
+    datatosend = (data & 0x0F);
+    send_to_lcd(datatosend, 1);
+}
+
+void lcd_clear(void)
+{
+    lcd_send_cmd(0x01);
+    HAL_Delay(2);
+}
+
+void lcd_put_cur(int row, int col)
+{
+    switch (row)
+    {
+        case 0:
+            col |= 0x80;
+            break;
+        case 1:
+            col |= 0xC0;
+            break;
+    }
+
+    lcd_send_cmd(col);
+}
+
+void lcd_init(void)
+{
+    // Inicialización en modo de 4 bits
+    HAL_Delay(50);  // Esperar >40ms
+    lcd_send_cmd(0x30);
+
+    HAL_Delay(5);   // Esperar >4.1ms
+    lcd_send_cmd(0x30);
+
+    HAL_Delay(1);   // Esperar >100us
+    lcd_send_cmd(0x30);
+
+    HAL_Delay(10);
+    lcd_send_cmd(0x20);  // Modo 4 bits
+    HAL_Delay(10);
+
+    // Inicialización de la pantalla
+    lcd_send_cmd(0x28);  // Configuración de funciones: DL=0 (modo 4 bits), N=1 (pantalla de 2 líneas), F=0 (5x8 caracteres)
+    HAL_Delay(1);
+
+    lcd_send_cmd(0x08);  // Control de encendido/apagado de la pantalla: D=0, C=0, B=0 --> pantalla apagada
+    HAL_Delay(1);
+
+    lcd_send_cmd(0x01);  // Limpiar pantalla
+    HAL_Delay(2);
+
+    lcd_send_cmd(0x06);  // Modo de entrada: I/D=1 (incrementa cursor), S=0 (sin desplazamiento)
+    HAL_Delay(2);
+
+    lcd_send_cmd(0x0C);  // Control de encendido/apagado: D=1 (pantalla encendida), C=0, B=0 (sin cursor ni parpadeo)
+}
+
+void lcd_send_string(char *str)
+{
+    while (*str)
+        lcd_send_data(*str++);
+}
+
+
+/*
+
+void LCD_SendChar(char c) {
+    lastSentChar = c; // Guardar el carácter enviado para depuración
+
+    uint8_t highNibble = (c >> 4) & 0x0F;  // Extraer parte alta (4 bits)
+    uint8_t lowNibble = c & 0x0F;         // Extraer parte baja (4 bits)
+
+    HAL_GPIO_WritePin(LCD_PORT, RS_PIN, GPIO_PIN_SET); // RS = 1 (Dato)
+
+    lastSent4Bits = highNibble; // Guardar parte alta para depuración
+    HAL_Delay(1000); // Mantener el valor visible más tiempo
+    LCD_Send4Bits(highNibble); // Enviar parte alta al LCD
+    HAL_Delay(1000); // Mantener la pausa
+
+    lastSent4Bits = lowNibble; // Guardar parte baja para depuración
+    HAL_Delay(1000); // Mantener el valor visible más tiempo
+    LCD_Send4Bits(lowNibble); // Enviar parte baja al LCD
+    HAL_Delay(1000); // Mantener la pausa
+}
+
+
+
+void LCD_SendString(char *str) {
+    while (*str) {
+        LCD_SendChar(*str++);
+    }
+}
+
+
+void LCD_Init(void) {
+    HAL_Delay(50); // 🔴 Esperar más de 40 ms tras encendido (datasheet)
+
+    // 🔵 Secuencia para forzar modo 8 bits
+    LCD_Send4Bits(0x03);
+    HAL_Delay(50);
+    LCD_Send4Bits(0x03);
+    HAL_Delay(10);
+    LCD_Send4Bits(0x03);
+    HAL_Delay(10);
+
+    // 🔵 Cambiar a modo 4 bits
+    LCD_Send4Bits(0x02);
+    HAL_Delay(10);
+
+    // 🔵 Configuración inicial
+    LCD_SendCommand(0x28); // Modo 4 bits, 2 líneas, 5x8 caracteres
+    HAL_Delay(10);
+    LCD_SendCommand(0x0C); // Display ON, Cursor OFF
+    HAL_Delay(10);
+    LCD_SendCommand(0x01); // Limpiar pantalla
+	HAL_Delay(20); // 🔴 Esperar 1.53 ms según datasheet
+    LCD_SendCommand(0x06); // Incremento de cursor
+    HAL_Delay(10);
+
+    LCD_SendCommand(0x0E); // Display ON, Cursor ON (verifica si algo aparece)
+    HAL_Delay(10);
+}
+ */
+
+// DISPLAY FINAL
+
+
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
+
+int row = 0;
+int col = 0;
 
 /* USER CODE END 0 */
 
@@ -146,6 +369,25 @@ int main(void)
 
   	// SENSOR SHT85 TEMPERATURA FIN
 
+  	// DISPLAY INICIO
+
+    //LCD_Init();
+    //LCD_SendString("Hola, STM32!");
+
+    lcd_init();
+    lcd_put_cur(0, 0);
+    lcd_send_string("HELLO ");
+    lcd_send_string("WORLD ");
+    lcd_send_string("FROM");
+
+    lcd_put_cur(1, 0);
+    lcd_send_string("CONTROLLERS TECH");
+    HAL_Delay(3000);
+    lcd_clear();
+
+
+  	// DISPLAY FINAL
+
 
   /* USER CODE END 2 */
 
@@ -170,6 +412,7 @@ int main(void)
 
 	  		// Control de ventilador y leds
 
+	  /*
 	  		if (HAL_GetTick() - lastTimeSHT >= samplingPeriod) { // Leer los sensores cada 200 ms (periodo de muestreo)
 	  			lastTimeSHT = HAL_GetTick(); // Se actualiza referencia
 	  			ReadSHT85(&temperature, &humidity); // Leer sensores
@@ -198,20 +441,40 @@ int main(void)
 	  						increasingLight = true; // Cambiar dirección
 	  					}
 	  				}
-
+*/
 	  				//__HAL_TIM_SET_COMPARE(&htim2, TIM_CHANNEL_2, duty); // Ajusta el ciclo de trabajo del led rojo
-	  			}
-	  			HAL_GPIO_WritePin(GPIOD, GPIO_PIN_13, GPIO_PIN_SET); // Encender led
+	  			//}
+	  		//	HAL_GPIO_WritePin(GPIOD, GPIO_PIN_13, GPIO_PIN_SET); // Encender led
 //	  			HAL_GPIO_WritePin(GPIOA, GPIO_PIN_3, GPIO_PIN_RESET); // Encender VENTILADOR
 //	  			HAL_GPIO_WritePin(GPIOA, GPIO_PIN_2, GPIO_PIN_SET); // Verde apagado
 
-	  		} else {
+/*	  		} else {
 	  			HAL_GPIO_WritePin(GPIOD, GPIO_PIN_13, GPIO_PIN_RESET); // Apagar led
 //	  			HAL_GPIO_WritePin(GPIOA, GPIO_PIN_3, GPIO_PIN_SET); // Apagar VENTILADOR
 //	  			__HAL_TIM_SET_COMPARE(&htim2, TIM_CHANNEL_2, 0); // AMARILLO (ROJO + VERDE)
 //	  			HAL_GPIO_WritePin(GPIOA, GPIO_PIN_2, GPIO_PIN_RESET); // AMARILLO (ROJO + VERDE)
 	  		}
 	  		// SENSOR SHT85 TEMPERATURA FIN
+*/
+
+	  		// DISPLAY INICIO
+
+
+	  for (int i = 0; i < 128; i++)
+	  {
+	      lcd_put_cur(row, col);
+	      lcd_send_data(i + 48);
+
+	      col++;
+
+	      if (col > 15) { row++; col = 0; }
+	      if (row > 1) row = 0;
+
+	      HAL_Delay(250);
+	  }
+
+
+	  		// DISPLAY FINAL
 
     /* USER CODE END WHILE */
 
@@ -312,18 +575,28 @@ static void MX_GPIO_Init(void)
 /* USER CODE END MX_GPIO_Init_1 */
 
   /* GPIO Ports Clock Enable */
-  __HAL_RCC_GPIOD_CLK_ENABLE();
+  __HAL_RCC_GPIOA_CLK_ENABLE();
   __HAL_RCC_GPIOB_CLK_ENABLE();
 
   /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(GPIOD, GPIO_PIN_13, GPIO_PIN_RESET);
+  HAL_GPIO_WritePin(GPIOA, GPIO_PIN_0|GPIO_PIN_1, GPIO_PIN_RESET);
 
-  /*Configure GPIO pin : PD13 */
-  GPIO_InitStruct.Pin = GPIO_PIN_13;
+  /*Configure GPIO pin Output Level */
+  HAL_GPIO_WritePin(GPIOA, GPIO_PIN_2|GPIO_PIN_3|GPIO_PIN_4|GPIO_PIN_5, GPIO_PIN_SET);
+
+  /*Configure GPIO pins : PA0 PA1 */
+  GPIO_InitStruct.Pin = GPIO_PIN_0|GPIO_PIN_1;
   GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
-  HAL_GPIO_Init(GPIOD, &GPIO_InitStruct);
+  HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
+
+  /*Configure GPIO pins : PA2 PA3 PA4 PA5 */
+  GPIO_InitStruct.Pin = GPIO_PIN_2|GPIO_PIN_3|GPIO_PIN_4|GPIO_PIN_5;
+  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
+  GPIO_InitStruct.Pull = GPIO_PULLUP;
+  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+  HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
 
 /* USER CODE BEGIN MX_GPIO_Init_2 */
 /* USER CODE END MX_GPIO_Init_2 */
