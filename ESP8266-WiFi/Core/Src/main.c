@@ -45,7 +45,10 @@
 UART_HandleTypeDef huart2;
 
 /* USER CODE BEGIN PV */
-char response[100];
+char response[100];  // Buffer para almacenar la respuesta
+uint8_t rxIndex = 0; // Índice de recepción
+uint8_t rxComplete = 0; // Bandera de recepción completa
+
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -59,25 +62,24 @@ void sendATCommand(char *cmd) {
     HAL_UART_Transmit(&huart2, (uint8_t*)cmd, strlen(cmd), HAL_MAX_DELAY);
 }
 
-void receiveResponse(char *buffer, uint16_t size) {
-    memset(buffer, 0, size); // Limpiar buffer
-    uint16_t index = 0;
-    char temp;
-
-    while (index < size - 1) {
-        if (HAL_UART_Receive(&huart2, (uint8_t*)&temp, 1, 100) == HAL_OK) {
-            buffer[index++] = temp;
-            if (temp == '\n') break; // Detenerse al recibir el fin de línea
-        }
-    }
-
-    buffer[index] = '\0'; // Asegurar terminación de cadena
-    HAL_UART_Transmit(&huart2, (uint8_t*)buffer, strlen(buffer), HAL_MAX_DELAY);
+void receiveResponse_IT() {
+    rxIndex = 0;  // Reiniciar índice
+    rxComplete = 0;  // Limpiar bandera de recepción completa
+    memset(response, 0, sizeof(response));  // Limpiar el buffer
+    HAL_UART_Receive_IT(&huart2, (uint8_t*)&response[rxIndex], 1);  // Recibir primer byte
 }
 
-/**
-  * @brief  Conectar el ESP8266 a WiFi (reconexión automática)
-  */
+void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart) {
+    if (huart->Instance == USART2) {  // Verificar si es el UART correcto
+        if (response[rxIndex] == '\n' || rxIndex >= sizeof(response) - 1) {
+            rxComplete = 1;  // Marcar recepción completa
+        } else {
+            rxIndex++;  // Avanzar en el buffer
+            HAL_UART_Receive_IT(&huart2, (uint8_t*)&response[rxIndex], 1);  // Seguir recibiendo
+        }
+    }
+}
+
 
 /* USER CODE END PFP */
 
@@ -119,36 +121,12 @@ int main(void)
   /* USER CODE BEGIN 2 */
   HAL_Delay(3000);  // Esperar 3s después de encender el ESP8266
 
-  // Enviar comando AT para verificar comunicación
+  // Enviar comando AT y esperar respuesta con interrupciones
   sendATCommand("AT\r\n");
-  HAL_Delay(1000);
-  receiveResponse(response, sizeof(response));
+  receiveResponse_IT();  // Iniciar recepción en interrupciones
+  while (!rxComplete);  // Esperar a que la respuesta llegue completamente
   printf("Respuesta AT: %s\n", response);
 
-  // Reiniciar el ESP8266
-  sendATCommand("AT+RST\r\n");
-  HAL_Delay(5000);  // Aumentar el tiempo de espera para el reinicio
-  receiveResponse(response, sizeof(response));
-  printf("Respuesta RST: %s\n", response);
-
-  // Configurar modo Station
-  sendATCommand("AT+CWMODE=1\r\n");
-  HAL_Delay(1000);
-  receiveResponse(response, sizeof(response));
-  printf("Respuesta CWMODE: %s\n", response);
-
-  // Conectar a WiFi
-  sendATCommand("AT+CWJAP=\"MOVISTAR_1DD2\",\"55253A2D16DDBF32D47B\"\r\n");  // Reemplaza SSID y PASSWORD
-  HAL_Delay(15000);  // Aumentar el tiempo de espera para la conexión WiFi
-  receiveResponse(response, sizeof(response));
-  printf("Respuesta CWJAP: %s\n", response);
-
-  // Verificar si la conexión fue exitosa
-  if (strstr(response, "WIFI CONNECTED") != NULL) {
-      HAL_GPIO_WritePin(GPIOD, GPIO_PIN_12, GPIO_PIN_SET);  // Encender LED
-  } else {
-      HAL_GPIO_WritePin(GPIOD, GPIO_PIN_12, GPIO_PIN_RESET);  // Apagar LED
-  }
   /* USER CODE END 2 */
 
   /* Infinite loop */
