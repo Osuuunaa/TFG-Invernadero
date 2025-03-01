@@ -24,6 +24,8 @@
 #include <string.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <stdbool.h>  // Necesario para usar bool en C
+
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -45,9 +47,14 @@
 UART_HandleTypeDef huart2;
 
 /* USER CODE BEGIN PV */
-char response[100];  // Buffer para almacenar la respuesta
-uint8_t rxIndex = 0; // Índice de recepción
-uint8_t rxComplete = 0; // Bandera de recepción completa
+char response[256];  // Buffer para almacenar la respuesta (aumentado a 256 bytes)
+volatile uint8_t rxIndex = 0; // Índice de recepción
+volatile uint8_t rxComplete = 0; // Bandera de recepción completa
+uint8_t flagConexion = 0; // Bandera de recepción completa
+
+
+char http_request[150]; // BOOORRAR
+
 
 /* USER CODE END PV */
 
@@ -71,15 +78,139 @@ void receiveResponse_IT() {
 
 void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart) {
     if (huart->Instance == USART2) {  // Verificar si es el UART correcto
-        if (response[rxIndex] == '\n' || rxIndex >= sizeof(response) - 1) {
-            rxComplete = 1;  // Marcar recepción completa
+        if (rxIndex < sizeof(response) - 1) {  // Evitar desbordamiento del buffer
+            rxIndex++;  // Avanzar índice
+            if (response[rxIndex - 1] == '\n') {  // Detecta el fin de la respuesta
+                rxComplete = 1;  // Marcar recepción completa
+            } else {
+                HAL_UART_Receive_IT(&huart2, (uint8_t*)&response[rxIndex], 1);  // Recibir siguiente byte
+            }
         } else {
-            rxIndex++;  // Avanzar en el buffer
-            HAL_UART_Receive_IT(&huart2, (uint8_t*)&response[rxIndex], 1);  // Seguir recibiendo
+            rxComplete = 1;  // Si se llena el buffer, finalizar recepción
         }
     }
 }
 
+void connectToWiFi() {
+    HAL_Delay(3000);  // Esperar 3s después de encender el ESP8266
+
+    // Enviar comando AT y esperar respuesta con interrupciones
+    sendATCommand("AT\r\n");
+    receiveResponse_IT();
+    while (!rxComplete);
+    printf("Respuesta AT: %s\n", response);
+    rxComplete = 0;
+
+    // Reiniciar el ESP8266
+    sendATCommand("AT+RST\r\n");
+    receiveResponse_IT();
+    HAL_Delay(5000);
+    while (!rxComplete);
+    printf("Respuesta RST: %s\n", response);
+    rxComplete = 0;
+
+    // Configurar modo Station
+    sendATCommand("AT+CWMODE=1\r\n");
+    receiveResponse_IT();
+    HAL_Delay(1000);
+    while (!rxComplete);
+    printf("Respuesta CWMODE: %s\n", response);
+    rxComplete = 0;
+
+    // Conectar a WiFi
+    sendATCommand("AT+CWJAP=\"MOVISTAR_1DD2\",\"55253A2D16DDBF32D47B\"\r\n");
+    receiveResponse_IT();
+    HAL_Delay(15000);
+    while (!rxComplete);
+    printf("Respuesta CWJAP: %s\n", response);
+    rxComplete = 0;
+
+    // Verificar si la conexión fue exitosa
+    if (strstr(response, "WIFI CONNECTED") != NULL) {
+        HAL_GPIO_WritePin(GPIOD, GPIO_PIN_12, GPIO_PIN_SET);  // Encender LED
+    } else {
+        HAL_GPIO_WritePin(GPIOD, GPIO_PIN_12, GPIO_PIN_RESET);  // Apagar LED
+    }
+}
+
+void sendDataToThingSpeak(float temperature) {
+
+
+
+    // 1. Iniciar conexión TCP con ThingSpeak
+    sendATCommand("AT+CIPSTART=\"TCP\",\"api.thingspeak.com\",80\r\n");
+    receiveResponse_IT();
+    HAL_Delay(3000);  // Aumentar tiempo de espera
+    while (!rxComplete);  // Esperar a recibir la respuesta
+    printf("Respuesta CIPSTART: %s\n", response);
+    rxComplete = 0;  // Resetear bandera
+
+
+    HAL_Delay(16000);
+    bzero(response, sizeof(response));
+    flagConexion = 2;
+
+
+    // 2. Crear la solicitud HTTP con el valor de temperatura en `field1`
+//    char http_request[150];
+   // sprintf(http_request, "GET https://api.thingspeak.com/update?api_key=NHNNS6OWGDSBEJF1&field1=%.2f\r\n", temperature); // Sustituye con tu API Key
+    sprintf(http_request,
+        "GET /update?api_key=NHNNS6OWGDSBEJF1&field1=%.2f HTTP/1.1\r\n"
+        "Host: api.thingspeak.com\r\n"
+        "Connection: close\r\n\r\n",
+        temperature);
+
+
+    HAL_Delay(16000);
+    bzero(response, sizeof(response));
+    flagConexion = 3;
+
+    // 3. Indicar la cantidad de bytes a enviar
+    char cmd[30];
+    sprintf(cmd, "AT+CIPSEND=%d\r\n", strlen(http_request));
+    sendATCommand(cmd);
+    receiveResponse_IT();
+    HAL_Delay(1000);
+    while (!rxComplete);
+    printf("Respuesta CIPSEND: %s\n", response);
+    rxComplete = 0;
+
+
+    HAL_Delay(16000);
+    bzero(response, sizeof(response));
+    flagConexion = 4;
+
+//    // Verificar si está listo para enviar datos
+//    if (strstr(response, ">") == NULL) {
+//        printf("Error al preparar el envío de datos\n");
+//        return;
+//    }
+
+    // 4. Enviar la petición HTTP
+    sendATCommand(http_request);
+    receiveResponse_IT();
+    HAL_Delay(2000);
+    while (!rxComplete);
+    printf("Respuesta HTTP: %s\n", response);
+    rxComplete = 0;
+
+    HAL_Delay(2000);
+    bzero(response, sizeof(response));
+    flagConexion = 5;
+
+    // 5. Cerrar la conexión TCP
+    sendATCommand("AT+CIPCLOSE\r\n");
+    receiveResponse_IT();
+    HAL_Delay(1000);
+    while (!rxComplete);
+    printf("Respuesta CIPCLOSE: %s\n", response);
+    rxComplete = 0;
+}
+
+int __io_putchar(int ch) {
+    HAL_UART_Transmit(&huart2, (uint8_t *)&ch, 1, HAL_MAX_DELAY);
+    return ch;
+}
 
 /* USER CODE END PFP */
 
@@ -95,7 +226,7 @@ void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart) {
 int main(void)
 {
   /* USER CODE BEGIN 1 */
-
+  float temperature = 23.45; // Valor de temperatura de ejemplo
   /* USER CODE END 1 */
 
   /* MCU Configuration--------------------------------------------------------*/
@@ -119,13 +250,30 @@ int main(void)
   MX_USART2_UART_Init();
   MX_NVIC_Init(); // Inicializar NVIC
   /* USER CODE BEGIN 2 */
+  flagConexion = 0;
   HAL_Delay(3000);  // Esperar 3s después de encender el ESP8266
 
-  // Enviar comando AT y esperar respuesta con interrupciones
-  sendATCommand("AT\r\n");
-  receiveResponse_IT();  // Iniciar recepción en interrupciones
-  while (!rxComplete);  // Esperar a que la respuesta llegue completamente
-  printf("Respuesta AT: %s\n", response);
+
+
+  //bzero(response, sizeof(response)); limpia buffer
+
+//  for (int i = 0; i < sizeof(response); i++) {
+//      response[i] = 0;
+//  }
+
+  connectToWiFi();
+  flagConexion = 1;
+
+
+
+
+  bzero(response, sizeof(response));
+
+  HAL_Delay(5000);
+  sendDataToThingSpeak(temperature);
+  flagConexion = 6;
+
+
 
   /* USER CODE END 2 */
 
@@ -140,6 +288,7 @@ int main(void)
   }
   /* USER CODE END 3 */
 }
+
 
 /**
   * @brief System Clock Configuration
@@ -293,3 +442,9 @@ void assert_failed(uint8_t *file, uint32_t line)
   /* USER CODE END 6 */
 }
 #endif /* USE_FULL_ASSERT */
+
+#ifdef __GNUC__
+    #define PUTCHAR_PROTOTYPE int __io_putchar(int ch)
+#else
+    #define PUTCHAR_PROTOTYPE int fputc(int ch, FILE *f)
+#endif /* __GNUC__ */
