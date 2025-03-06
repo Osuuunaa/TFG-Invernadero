@@ -1,0 +1,9 @@
+../Core/Src/main.c:74:13:floatToStr	1
+../Core/Src/main.c:80:6:LCD_UpdateTemperature	1
+../Core/Src/main.c:94:5:main	4
+../Core/Src/main.c:162:6:SystemClock_Config	3
+../Core/Src/main.c:209:13:MX_I2C1_Init	2
+../Core/Src/main.c:243:13:MX_USART2_UART_Init	2
+../Core/Src/main.c:279:13:MX_GPIO_Init	1
+../Core/Src/main.c:308:13:MX_NVIC_Init	1
+../Core/Src/main.c:320:6:Error_Handler	1

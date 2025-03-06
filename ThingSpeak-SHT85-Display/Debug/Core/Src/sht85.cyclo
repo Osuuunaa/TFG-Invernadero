@@ -1,0 +1,3 @@
+../Core/Src/sht85.c:24:6:ReadSHT85	1
+../Core/Src/sht85.c:39:6:setAlarm	6
+../Core/Src/sht85.c:61:6:calculatorAverageTemperature	2

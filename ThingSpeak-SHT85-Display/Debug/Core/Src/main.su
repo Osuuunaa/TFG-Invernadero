@@ -1,0 +1,9 @@
+../Core/Src/main.c:74:13:floatToStr	24	static
+../Core/Src/main.c:80:6:LCD_UpdateTemperature	24	static
+../Core/Src/main.c:94:5:main	16	static
+../Core/Src/main.c:162:6:SystemClock_Config	88	static
+../Core/Src/main.c:209:13:MX_I2C1_Init	8	static
+../Core/Src/main.c:243:13:MX_USART2_UART_Init	8	static
+../Core/Src/main.c:279:13:MX_GPIO_Init	40	static
+../Core/Src/main.c:308:13:MX_NVIC_Init	8	static
+../Core/Src/main.c:320:6:Error_Handler	4	static,ignoring_inline_asm
