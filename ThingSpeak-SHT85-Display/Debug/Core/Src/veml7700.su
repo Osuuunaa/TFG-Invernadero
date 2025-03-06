@@ -1,0 +1,2 @@
+../Core/Src/veml7700.c:5:6:VEML7700_Init	32	static
+../Core/Src/veml7700.c:11:7:VEML7700_ReadLuminosity	40	static

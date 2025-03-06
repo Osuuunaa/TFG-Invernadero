@@ -69,23 +69,16 @@ void connectToWiFi(const char* ssid, const char* password) {
     while (!rxComplete);
     printf("Respuesta CWJAP: %s\n", response);
     rxComplete = 0;
-
-    // Verificar si la conexión fue exitosa
-    if (strstr(response, "WIFI CONNECTED") != NULL) {
-        HAL_GPIO_WritePin(GPIOD, GPIO_PIN_12, GPIO_PIN_SET);  // Encender LED
-    } else {
-        HAL_GPIO_WritePin(GPIOD, GPIO_PIN_12, GPIO_PIN_RESET);  // Apagar LED
-    }
 }
 
-void sendDataToThingSpeak(const char* apiKey, float temperature) {
+void sendDataToThingSpeak(const char* apiKey, float temperature, float humidity, float luminosity) {
     char cmd[100];
     sprintf(cmd, "AT+CIPSTART=\"TCP\",\"api.thingspeak.com\",80\r\n");
     sendATCommand(cmd);
     HAL_Delay(2000);
 
-    char http_request[150];
-    sprintf(http_request, "GET /update?api_key=%s&field1=%.2f HTTP/1.1\r\nHost: api.thingspeak.com\r\nConnection: close\r\n\r\n", apiKey, temperature);
+    char http_request[250];
+    sprintf(http_request, "GET /update?api_key=%s&field1=%.2f&field2=%.2f&field3=%.2f HTTP/1.1\r\nHost: api.thingspeak.com\r\nConnection: close\r\n\r\n", apiKey, temperature, humidity, luminosity);
 
     char http_cmd[50];
     sprintf(http_cmd, "AT+CIPSEND=%d\r\n", strlen(http_request));

@@ -25,6 +25,7 @@
 #include <stdbool.h>
 #include "lcd.h"
 #include "sht85.h"
+#include "veml7700.h"
 #include "wifi_thingspeak.h"
 /* USER CODE END Includes */
 
@@ -52,10 +53,13 @@ UART_HandleTypeDef huart2;
 /* USER CODE BEGIN PV */
 float temperature = 0.0f;
 float humidity = 0.0f;
+float luminosity = 0.0f;
 uint32_t lastTimeMeasurement = 0;
 uint32_t lastTimeDisplay = 0;
 uint32_t lastTimeSend = 0;
 uint16_t measurementInterval = 10000; // 10 seconds
+uint16_t displayInterval = 5000; // 5 seconds
+uint8_t displayState = 0; // 0: Temperature, 1: Humidity, 2: Luminosity
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -67,6 +71,8 @@ static void MX_NVIC_Init(void);
 const char* floatToStr(float num, int precision);
 /* USER CODE BEGIN PFP */
 void LCD_UpdateTemperature(float temperature);
+void LCD_UpdateHumidity(float humidity);
+void LCD_UpdateLuminosity(float luminosity);
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
@@ -84,6 +90,24 @@ void LCD_UpdateTemperature(float temperature) {
     LCD_Print("Temperatura: ");
     LCD_SetCursor(1, 0);
     LCD_Print(strTemp);
+}
+
+void LCD_UpdateHumidity(float humidity) {
+    const char* strHum = floatToStr(humidity, 2);
+    LCD_Clear();
+    LCD_SetCursor(0, 0);
+    LCD_Print("Humedad: ");
+    LCD_SetCursor(1, 0);
+    LCD_Print(strHum);
+}
+
+void LCD_UpdateLuminosity(float luminosity) {
+    const char* strLux = floatToStr(luminosity, 2);
+    LCD_Clear();
+    LCD_SetCursor(0, 0);
+    LCD_Print("Luminosidad: ");
+    LCD_SetCursor(1, 0);
+    LCD_Print(strLux);
 }
 /* USER CODE END 0 */
 
@@ -123,6 +147,7 @@ int main(void)
 
   /* USER CODE BEGIN 2 */
   LCD_Init();
+  VEML7700_Init();
   connectToWiFi(WIFI_SSID, WIFI_PASS);
   /* USER CODE END 2 */
 
@@ -130,27 +155,45 @@ int main(void)
   /* USER CODE BEGIN WHILE */
   while (1)
   {
-    uint32_t currentTick = HAL_GetTick();
 
-    if (currentTick - lastTimeMeasurement >= measurementInterval) {
-      lastTimeMeasurement = currentTick;
-      ReadSHT85(&temperature, &humidity);
-    }
-
-    if (currentTick - lastTimeDisplay >= measurementInterval) {
-      lastTimeDisplay = currentTick;
-      LCD_UpdateTemperature(temperature);
-    }
-
-    if (currentTick - lastTimeSend >= measurementInterval) {
-      lastTimeSend = currentTick;
-      sendDataToThingSpeak(THINGSPEAK_API_KEY, temperature);
-    }
 
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
-    HAL_Delay(500);
+
+	  uint32_t currentTick = HAL_GetTick();
+
+	  if (currentTick - lastTimeMeasurement >= measurementInterval) {
+		lastTimeMeasurement = currentTick;
+		ReadSHT85(&temperature, &humidity);
+		luminosity = VEML7700_ReadLuminosity();
+	  }
+
+	  if (currentTick - lastTimeDisplay >= displayInterval) {
+		lastTimeDisplay = currentTick;
+		switch (displayState) {
+		  case 0:
+			LCD_UpdateTemperature(temperature);
+			displayState = 1;
+			break;
+		  case 1:
+			LCD_UpdateHumidity(humidity);
+			displayState = 2;
+			break;
+		  case 2:
+			LCD_UpdateLuminosity(luminosity);
+			displayState = 0;
+			break;
+		}
+	  }
+
+	  if (currentTick - lastTimeSend >= measurementInterval) {
+		lastTimeSend = currentTick;
+		sendDataToThingSpeak(THINGSPEAK_API_KEY, temperature, humidity, luminosity);
+	  }
+
+	  HAL_Delay(500);
+
   }
   /* USER CODE END 3 */
 }
