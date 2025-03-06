@@ -35,7 +35,9 @@
 
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
-
+#define WIFI_SSID "MOVISTAR_1DD2"
+#define WIFI_PASS "55253A2D16DDBF32D47B"
+#define THINGSPEAK_API_KEY "6K0OKMK195CFJ8SQ"
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -51,10 +53,6 @@ char response[256];  // Buffer para almacenar la respuesta (aumentado a 256 byte
 volatile uint8_t rxIndex = 0; // Índice de recepción
 volatile uint8_t rxComplete = 0; // Bandera de recepción completa
 uint8_t flagConexion = 0; // Bandera de recepción completa
-
-
-char http_request[150]; // BOOORRAR
-
 
 /* USER CODE END PV */
 
@@ -118,7 +116,9 @@ void connectToWiFi() {
     rxComplete = 0;
 
     // Conectar a WiFi
-    sendATCommand("AT+CWJAP=\"MOVISTAR_1DD2\",\"55253A2D16DDBF32D47B\"\r\n");
+    char connectCmd[100];
+    sprintf(connectCmd, "AT+CWJAP=\"%s\",\"%s\"\r\n", WIFI_SSID, WIFI_PASS);
+    sendATCommand(connectCmd);
     receiveResponse_IT();
     HAL_Delay(15000);
     while (!rxComplete);
@@ -134,82 +134,20 @@ void connectToWiFi() {
 }
 
 void sendDataToThingSpeak(float temperature) {
-
-
-
-    // 1. Iniciar conexión TCP con ThingSpeak
-    sendATCommand("AT+CIPSTART=\"TCP\",\"api.thingspeak.com\",80\r\n");
-    receiveResponse_IT();
-    HAL_Delay(3000);  // Aumentar tiempo de espera
-    while (!rxComplete);  // Esperar a recibir la respuesta
-    printf("Respuesta CIPSTART: %s\n", response);
-    rxComplete = 0;  // Resetear bandera
-
-
-    HAL_Delay(16000);
-    bzero(response, sizeof(response));
-    flagConexion = 2;
-
-
-    // 2. Crear la solicitud HTTP con el valor de temperatura en `field1`
-//    char http_request[150];
-   // sprintf(http_request, "GET https://api.thingspeak.com/update?api_key=NHNNS6OWGDSBEJF1&field1=%.2f\r\n", temperature); // Sustituye con tu API Key
-    sprintf(http_request,
-        "GET /update?api_key=NHNNS6OWGDSBEJF1&field1=%.2f HTTP/1.1\r\n"
-        "Host: api.thingspeak.com\r\n"
-        "Connection: close\r\n\r\n",
-        temperature);
-
-
-    HAL_Delay(16000);
-    bzero(response, sizeof(response));
-    flagConexion = 3;
-
-    // 3. Indicar la cantidad de bytes a enviar
-    char cmd[30];
-    sprintf(cmd, "AT+CIPSEND=%d\r\n", strlen(http_request));
+    char cmd[100];
+    sprintf(cmd, "AT+CIPSTART=\"TCP\",\"api.thingspeak.com\",80\r\n");
     sendATCommand(cmd);
-    receiveResponse_IT();
+    HAL_Delay(2000);
+
+    char http_request[150];
+    sprintf(http_request, "GET /update?api_key=%s&field1=%.2f HTTP/1.1\r\nHost: api.thingspeak.com\r\nConnection: close\r\n\r\n", THINGSPEAK_API_KEY, temperature);
+
+    char http_cmd[50];
+    sprintf(http_cmd, "AT+CIPSEND=%d\r\n", strlen(http_request));
+    sendATCommand(http_cmd);
     HAL_Delay(1000);
-    while (!rxComplete);
-    printf("Respuesta CIPSEND: %s\n", response);
-    rxComplete = 0;
-
-
-    HAL_Delay(16000);
-    bzero(response, sizeof(response));
-    flagConexion = 4;
-
-//    // Verificar si está listo para enviar datos
-//    if (strstr(response, ">") == NULL) {
-//        printf("Error al preparar el envío de datos\n");
-//        return;
-//    }
-
-    // 4. Enviar la petición HTTP
     sendATCommand(http_request);
-    receiveResponse_IT();
     HAL_Delay(2000);
-    while (!rxComplete);
-    printf("Respuesta HTTP: %s\n", response);
-    rxComplete = 0;
-
-    HAL_Delay(2000);
-    bzero(response, sizeof(response));
-    flagConexion = 5;
-
-    // 5. Cerrar la conexión TCP
-    sendATCommand("AT+CIPCLOSE\r\n");
-    receiveResponse_IT();
-    HAL_Delay(1000);
-    while (!rxComplete);
-    printf("Respuesta CIPCLOSE: %s\n", response);
-    rxComplete = 0;
-}
-
-int __io_putchar(int ch) {
-    HAL_UART_Transmit(&huart2, (uint8_t *)&ch, 1, HAL_MAX_DELAY);
-    return ch;
 }
 
 /* USER CODE END PFP */
@@ -226,7 +164,7 @@ int __io_putchar(int ch) {
 int main(void)
 {
   /* USER CODE BEGIN 1 */
-  float temperature = 23.45; // Valor de temperatura de ejemplo
+  float temperature = 22.5; // Valor de temperatura de ejemplo
   /* USER CODE END 1 */
 
   /* MCU Configuration--------------------------------------------------------*/
@@ -253,27 +191,14 @@ int main(void)
   flagConexion = 0;
   HAL_Delay(3000);  // Esperar 3s después de encender el ESP8266
 
-
-
-  //bzero(response, sizeof(response)); limpia buffer
-
-//  for (int i = 0; i < sizeof(response); i++) {
-//      response[i] = 0;
-//  }
-
   connectToWiFi();
   flagConexion = 1;
-
-
-
 
   bzero(response, sizeof(response));
 
   HAL_Delay(5000);
   sendDataToThingSpeak(temperature);
   flagConexion = 6;
-
-
 
   /* USER CODE END 2 */
 
