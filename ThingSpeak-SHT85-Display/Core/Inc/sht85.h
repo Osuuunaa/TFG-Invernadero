@@ -10,8 +10,8 @@
 extern I2C_HandleTypeDef hi2c1; // Declaración del manejador I2C
 
 // Declaraciones de variables globales
-extern float temperature;
-extern float humidity;
+//extern float temperature;
+//extern float humidity;
 extern uint16_t temp_raw, hum_raw;
 extern bool alarm;
 extern float temperature_max;

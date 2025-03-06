@@ -1,8 +1,8 @@
-../Core/Src/lcd.c:88:6:LCD_Init	8	static
-../Core/Src/lcd.c:98:6:LCD_SendCommand	16	static
-../Core/Src/lcd.c:102:6:LCD_SendData	16	static
-../Core/Src/lcd.c:106:6:LCD_Print	16	static
-../Core/Src/lcd.c:113:6:LCD_SetCursor	24	static
-../Core/Src/lcd.c:118:6:LCD_Clear	8	static
-../Core/Src/lcd.c:123:13:LCD_EnablePulse	8	static
-../Core/Src/lcd.c:130:13:LCD_Send	16	static
+../Core/Src/lcd.c:8:6:LCD_Init	8	static
+../Core/Src/lcd.c:21:6:LCD_SendCommand	16	static
+../Core/Src/lcd.c:25:6:LCD_SendData	16	static
+../Core/Src/lcd.c:29:6:LCD_Print	16	static
+../Core/Src/lcd.c:36:6:LCD_SetCursor	24	static
+../Core/Src/lcd.c:41:6:LCD_Clear	8	static
+../Core/Src/lcd.c:46:13:LCD_EnablePulse	8	static
+../Core/Src/lcd.c:53:13:LCD_Send	16	static

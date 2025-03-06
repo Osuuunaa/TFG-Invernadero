@@ -2,14 +2,20 @@
 #define __VEML7700_H
 
 #include "stm32f4xx_hal.h"
+#include <stdbool.h>
 
-#define VEML7700_I2C_ADDR 0x10 << 1 // I2C address for VEML7700
-#define VEML7700_REG_CONF 0x00 // Configuration register
-#define VEML7700_REG_ALS  0x04 // ALS register
+extern I2C_HandleTypeDef hi2c2; // Usa I2C2 como en el SHT85
 
-extern I2C_HandleTypeDef hi2c1;
+// Variables globales para luminosidad
+//extern float luminosity;
+extern uint16_t lux_raw;
+extern float totalLuminosity;
+extern float averageLuminosity;
+extern uint8_t sampleCountLight;
 
 void VEML7700_Init(void);
-float VEML7700_ReadLuminosity(void);
+void ReadVEML7700(float *lux);
+bool setLightAlarm(float lux);
+void calculateAverageLuminosity(float newLux);
 
 #endif // __VEML7700_H
