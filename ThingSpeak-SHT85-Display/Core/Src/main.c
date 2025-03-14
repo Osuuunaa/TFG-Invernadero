@@ -56,10 +56,10 @@ UART_HandleTypeDef huart2;
 float temperature = 0.0f;
 float humidity = 0.0f;
 float luminosity = 0.0f;
-uint32_t lastTimeMeasurement = 0;
-uint32_t lastTimeDisplay = 0;
-uint32_t lastTimeSend = 0;
-uint16_t measurementInterval = 10000; // 10 seconds
+volatile uint32_t lastTimeMeasurement = 0;
+volatile uint32_t lastTimeDisplay = 0;
+volatile uint32_t lastTimeSend = 0;
+uint16_t measurementInterval = 15000; // 15 seconds. Tiempo mínimo que ThingSpeak registra mediciones
 uint16_t displayInterval = 5000; // 5 seconds
 uint8_t displayState = 0; // 0: Temperature, 1: Humidity, 2: Luminosity
 /* USER CODE END PV */
@@ -88,30 +88,35 @@ const char* floatToStr(float num, int precision) {
 }
 
 void LCD_UpdateTemperature(float temperature) {
-    const char* strTemp = floatToStr(temperature, 5);
+    const char* strTemp = floatToStr(temperature, 2);
     LCD_Clear();
     LCD_SetCursor(0, 0);
     LCD_Print("Temperatura: ");
     LCD_SetCursor(1, 0);
     LCD_Print(strTemp);
+    LCD_Print(" ");
+    LCD_SendData(223);  // Enviar código ASCII del símbolo de grados para HD44780
+    LCD_Print("C");
 }
 
 void LCD_UpdateHumidity(float humidity) {
-    const char* strHum = floatToStr(humidity, 5);
+    const char* strHum = floatToStr(humidity, 2);
     LCD_Clear();
     LCD_SetCursor(0, 0);
     LCD_Print("Humedad: ");
     LCD_SetCursor(1, 0);
     LCD_Print(strHum);
+    LCD_Print("% HR");
 }
 
 void LCD_UpdateLuminosity(float luminosity) {
-    const char* strLux = floatToStr(luminosity, 5);
+    const char* strLux = floatToStr(luminosity, 2);
     LCD_Clear();
     LCD_SetCursor(0, 0);
     LCD_Print("Luminosidad: ");
     LCD_SetCursor(1, 0);
     LCD_Print(strLux);
+    LCD_Print(" lux");
 }
 /* USER CODE END 0 */
 
@@ -173,8 +178,8 @@ int main(void)
 		  ReadVEML7700(&luminosity);
 	  }
 
-	  if (currentTick - lastTimeDisplay >= displayInterval) {
-		  lastTimeDisplay = currentTick;
+	  if (HAL_GetTick() - lastTimeDisplay >= displayInterval) {
+		  lastTimeDisplay = HAL_GetTick();
 		  switch (displayState) {
 			  case 0:
 				  LCD_UpdateTemperature(temperature);
@@ -194,9 +199,18 @@ int main(void)
 	  if (currentTick - lastTimeSend >= measurementInterval) {
 		  lastTimeSend = currentTick;
 		  sendDataToThingSpeak(THINGSPEAK_API_KEY, temperature, humidity, luminosity);
+
+
+		  LCD_Clear();
+		  LCD_SetCursor(0, 0);
+		  LCD_Print("DATOS A THINGSPEAK ");
+		  LCD_SetCursor(1, 0);
+		  LCD_Print("RECIBIDOS CORRECTAMENTE");
+
+
 	  }
 
-	  HAL_Delay(500);
+	  //HAL_Delay(500);
 
   }
   /* USER CODE END 3 */

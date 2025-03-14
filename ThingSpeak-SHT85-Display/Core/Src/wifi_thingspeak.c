@@ -71,11 +71,13 @@ void connectToWiFi(const char* ssid, const char* password) {
     rxComplete = 0;
 }
 
+
+
 void sendDataToThingSpeak(const char* apiKey, float temperature, float humidity, float luminosity) {
     char cmd[100];
     sprintf(cmd, "AT+CIPSTART=\"TCP\",\"api.thingspeak.com\",80\r\n");
     sendATCommand(cmd);
-    HAL_Delay(2000);
+    HAL_Delay(2000); // Espera sin bloquear
 
     char http_request[250];
     sprintf(http_request, "GET /update?api_key=%s&field1=%.2f&field2=%.2f&field3=%.2f HTTP/1.1\r\nHost: api.thingspeak.com\r\nConnection: close\r\n\r\n", apiKey, temperature, humidity, luminosity);
@@ -83,7 +85,8 @@ void sendDataToThingSpeak(const char* apiKey, float temperature, float humidity,
     char http_cmd[50];
     sprintf(http_cmd, "AT+CIPSEND=%d\r\n", strlen(http_request));
     sendATCommand(http_cmd);
-    HAL_Delay(1000);
+    HAL_Delay(1000); // Espera sin bloquear
+
     sendATCommand(http_request);
-    HAL_Delay(2000);
+    HAL_Delay(2000); // Espera sin bloquear
 }
