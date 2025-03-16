@@ -50,6 +50,8 @@
 I2C_HandleTypeDef hi2c1;
 I2C_HandleTypeDef hi2c2;
 
+SPI_HandleTypeDef hspi1;
+
 UART_HandleTypeDef huart2;
 
 /* USER CODE BEGIN PV */
@@ -59,7 +61,7 @@ float luminosity = 0.0f;
 volatile uint32_t lastTimeMeasurement = 0;
 volatile uint32_t lastTimeDisplay = 0;
 volatile uint32_t lastTimeSend = 0;
-uint16_t measurementInterval = 15000; // 15 seconds. Tiempo mínimo que ThingSpeak registra mediciones
+uint16_t measurementInterval = 7590; // 15.18 seconds. Tiempo mínimo que ThingSpeak registra mediciones
 uint16_t displayInterval = 5000; // 5 seconds
 uint8_t displayState = 0; // 0: Temperature, 1: Humidity, 2: Luminosity
 /* USER CODE END PV */
@@ -70,6 +72,7 @@ static void MX_GPIO_Init(void);
 static void MX_I2C1_Init(void);
 static void MX_USART2_UART_Init(void);
 static void MX_I2C2_Init(void);
+static void MX_SPI1_Init(void);
 /* USER CODE BEGIN PFP */
 static void MX_NVIC_Init(void);
 const char* floatToStr(float num, int precision);
@@ -154,12 +157,20 @@ int main(void)
   MX_I2C1_Init();
   MX_USART2_UART_Init();
   MX_I2C2_Init();
+  MX_SPI1_Init();
   /* USER CODE BEGIN 2 */
   MX_NVIC_Init();
 
   LCD_Init();
   VEML7700_Init();
   connectToWiFi(WIFI_SSID, WIFI_PASS);
+
+  LCD_Clear();
+  LCD_SetCursor(0, 0);
+  LCD_Print("Wifi conectado");
+  LCD_SetCursor(1, 0);
+  LCD_Print("correctamente");
+
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -172,43 +183,48 @@ int main(void)
 
 	  uint32_t currentTick = HAL_GetTick();
 
-	  if (currentTick - lastTimeMeasurement >= measurementInterval) {
-		  lastTimeMeasurement = currentTick;
-		  ReadSHT85(&temperature, &humidity);
-		  ReadVEML7700(&luminosity);
-	  }
+	      if (currentTick - lastTimeMeasurement >= measurementInterval) {
+	          lastTimeMeasurement = currentTick;
+	    	  //lastTimeMeasurement += measurementInterval; // Incrementar en lugar de reiniciar
+	          ReadSHT85(&temperature, &humidity);
+	          ReadVEML7700(&luminosity);
+	      }
 
-	  if (HAL_GetTick() - lastTimeDisplay >= displayInterval) {
-		  lastTimeDisplay = HAL_GetTick();
-		  switch (displayState) {
-			  case 0:
-				  LCD_UpdateTemperature(temperature);
-				  displayState = 1;
-				  break;
-			  case 1:
-				  LCD_UpdateHumidity(humidity);
-				  displayState = 2;
-				  break;
-			  case 2:
-				  LCD_UpdateLuminosity(luminosity);
-				  displayState = 0;
-				  break;
-		  }
-	  }
+	      if (currentTick - lastTimeDisplay >= displayInterval) {
+	          lastTimeDisplay = currentTick;
+	          //lastTimeDisplay += displayInterval; // Incrementar en lugar de reiniciar
+	          switch (displayState) {
+	              case 0:
+	                  LCD_UpdateTemperature(temperature);
+	                  displayState = 1;
+	                  break;
+	              case 1:
+	                  LCD_UpdateHumidity(humidity);
+	                  displayState = 2;
+	                  break;
+	              case 2:
+	                  LCD_UpdateLuminosity(luminosity);
+	                  displayState = 0;
+	                  break;
+	          }
+	      }
 
-	  if (currentTick - lastTimeSend >= measurementInterval) {
-		  lastTimeSend = currentTick;
-		  sendDataToThingSpeak(THINGSPEAK_API_KEY, temperature, humidity, luminosity);
+	      if (currentTick - lastTimeSend >= measurementInterval) {
+	          lastTimeSend = currentTick;
+
+	    	  //lastTimeSend += measurementInterval; // Incrementar en lugar de reiniciar
+	    	  sendDataToThingSpeak(THINGSPEAK_API_KEY, temperature, humidity, luminosity);
+
+//	          LCD_Clear();
+//	          LCD_SetCursor(0, 0);
+//	          LCD_Print("DATOS A THINGSPEAK ");
+//	          LCD_SetCursor(1, 0);
+//	          LCD_Print("RECIBIDOS CORRECTAMENTE");
+	      }
+
+	      processThingSpeakStateMachine(); // Procesar la máquina de estados de ThingSpeak
 
 
-		  LCD_Clear();
-		  LCD_SetCursor(0, 0);
-		  LCD_Print("DATOS A THINGSPEAK ");
-		  LCD_SetCursor(1, 0);
-		  LCD_Print("RECIBIDOS CORRECTAMENTE");
-
-
-	  }
 
 	  //HAL_Delay(500);
 
@@ -331,6 +347,44 @@ static void MX_I2C2_Init(void)
 }
 
 /**
+  * @brief SPI1 Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_SPI1_Init(void)
+{
+
+  /* USER CODE BEGIN SPI1_Init 0 */
+
+  /* USER CODE END SPI1_Init 0 */
+
+  /* USER CODE BEGIN SPI1_Init 1 */
+
+  /* USER CODE END SPI1_Init 1 */
+  /* SPI1 parameter configuration*/
+  hspi1.Instance = SPI1;
+  hspi1.Init.Mode = SPI_MODE_MASTER;
+  hspi1.Init.Direction = SPI_DIRECTION_2LINES;
+  hspi1.Init.DataSize = SPI_DATASIZE_8BIT;
+  hspi1.Init.CLKPolarity = SPI_POLARITY_LOW;
+  hspi1.Init.CLKPhase = SPI_PHASE_1EDGE;
+  hspi1.Init.NSS = SPI_NSS_SOFT;
+  hspi1.Init.BaudRatePrescaler = SPI_BAUDRATEPRESCALER_2;
+  hspi1.Init.FirstBit = SPI_FIRSTBIT_MSB;
+  hspi1.Init.TIMode = SPI_TIMODE_DISABLE;
+  hspi1.Init.CRCCalculation = SPI_CRCCALCULATION_DISABLE;
+  hspi1.Init.CRCPolynomial = 10;
+  if (HAL_SPI_Init(&hspi1) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN SPI1_Init 2 */
+
+  /* USER CODE END SPI1_Init 2 */
+
+}
+
+/**
   * @brief USART2 Initialization Function
   * @param None
   * @retval None
@@ -372,8 +426,8 @@ static void MX_USART2_UART_Init(void)
 static void MX_GPIO_Init(void)
 {
   GPIO_InitTypeDef GPIO_InitStruct = {0};
-/* USER CODE BEGIN MX_GPIO_Init_1 */
-/* USER CODE END MX_GPIO_Init_1 */
+  /* USER CODE BEGIN MX_GPIO_Init_1 */
+  /* USER CODE END MX_GPIO_Init_1 */
 
   /* GPIO Ports Clock Enable */
   __HAL_RCC_GPIOC_CLK_ENABLE();
@@ -384,6 +438,9 @@ static void MX_GPIO_Init(void)
   HAL_GPIO_WritePin(GPIOC, GPIO_PIN_0|GPIO_PIN_1|GPIO_PIN_2|GPIO_PIN_3
                           |GPIO_PIN_4|GPIO_PIN_5, GPIO_PIN_RESET);
 
+  /*Configure GPIO pin Output Level */
+  HAL_GPIO_WritePin(GPIOA, GPIO_PIN_4, GPIO_PIN_SET);
+
   /*Configure GPIO pins : PC0 PC1 PC2 PC3
                            PC4 PC5 */
   GPIO_InitStruct.Pin = GPIO_PIN_0|GPIO_PIN_1|GPIO_PIN_2|GPIO_PIN_3
@@ -393,8 +450,15 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
   HAL_GPIO_Init(GPIOC, &GPIO_InitStruct);
 
-/* USER CODE BEGIN MX_GPIO_Init_2 */
-/* USER CODE END MX_GPIO_Init_2 */
+  /*Configure GPIO pin : PA4 */
+  GPIO_InitStruct.Pin = GPIO_PIN_4;
+  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_HIGH;
+  HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
+
+  /* USER CODE BEGIN MX_GPIO_Init_2 */
+  /* USER CODE END MX_GPIO_Init_2 */
 }
 
 /* USER CODE BEGIN 4 */

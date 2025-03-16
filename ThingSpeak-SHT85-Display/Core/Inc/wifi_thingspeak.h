@@ -8,5 +8,6 @@ void receiveResponse_IT(void);
 void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart);
 void connectToWiFi(const char* ssid, const char* password);
 void sendDataToThingSpeak(const char* apiKey, float temperature, float humidity, float luminosity);
+void processThingSpeakStateMachine(void);
 
 #endif // __WIFI_THINGSPEAK_H

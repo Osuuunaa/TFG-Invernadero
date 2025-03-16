@@ -1,3 +1,4 @@
+"./Core/Src/backup_sd.o"
 "./Core/Src/lcd.o"
 "./Core/Src/main.o"
 "./Core/Src/sht85.o"
@@ -24,4 +25,5 @@
 "./Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_pwr_ex.o"
 "./Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_rcc.o"
 "./Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_rcc_ex.o"
+"./Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_spi.o"
 "./Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_uart.o"
