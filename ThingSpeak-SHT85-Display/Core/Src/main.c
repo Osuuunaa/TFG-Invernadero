@@ -27,6 +27,7 @@
 #include "sht85.h"
 #include "veml7700.h"
 #include "wifi_thingspeak.h"
+#include "rele.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -61,7 +62,7 @@ float luminosity = 0.0f;
 volatile uint32_t lastTimeMeasurement = 0;
 volatile uint32_t lastTimeDisplay = 0;
 volatile uint32_t lastTimeSend = 0;
-uint16_t measurementInterval = 7590; // 15.18 seconds. Tiempo mínimo que ThingSpeak registra mediciones
+uint16_t measurementInterval = 20000; // 20 seconds. Tiempo mínimo que ThingSpeak registra mediciones
 uint16_t displayInterval = 5000; // 5 seconds
 uint8_t displayState = 0; // 0: Temperature, 1: Humidity, 2: Luminosity
 /* USER CODE END PV */
@@ -171,6 +172,8 @@ int main(void)
   LCD_SetCursor(1, 0);
   LCD_Print("correctamente");
 
+  Rele_Off(); // Relé inicializado en OFF
+
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -183,50 +186,50 @@ int main(void)
 
 	  uint32_t currentTick = HAL_GetTick();
 
-	      if (currentTick - lastTimeMeasurement >= measurementInterval) {
-	          lastTimeMeasurement = currentTick;
-	    	  //lastTimeMeasurement += measurementInterval; // Incrementar en lugar de reiniciar
-	          ReadSHT85(&temperature, &humidity);
-	          ReadVEML7700(&luminosity);
-	      }
+	  if (currentTick - lastTimeMeasurement >= measurementInterval) {
+		  lastTimeMeasurement = currentTick;
+		  //lastTimeMeasurement += measurementInterval; // Incrementar en lugar de reiniciar
+		  ReadSHT85(&temperature, &humidity);
+		  ReadVEML7700(&luminosity);
 
-	      if (currentTick - lastTimeDisplay >= displayInterval) {
-	          lastTimeDisplay = currentTick;
-	          //lastTimeDisplay += displayInterval; // Incrementar en lugar de reiniciar
-	          switch (displayState) {
-	              case 0:
-	                  LCD_UpdateTemperature(temperature);
-	                  displayState = 1;
-	                  break;
-	              case 1:
-	                  LCD_UpdateHumidity(humidity);
-	                  displayState = 2;
-	                  break;
-	              case 2:
-	                  LCD_UpdateLuminosity(luminosity);
-	                  displayState = 0;
-	                  break;
-	          }
-	      }
+		  // Controlar el rele basado en la luminosidad
+		  Control_Rele(luminosity);
+	  }
 
-	      if (currentTick - lastTimeSend >= measurementInterval) {
-	          lastTimeSend = currentTick;
+	  if (currentTick - lastTimeDisplay >= displayInterval) {
+		  lastTimeDisplay = currentTick;
+		  //lastTimeDisplay += displayInterval; // Incrementar en lugar de reiniciar
+		  switch (displayState) {
+			  case 0:
+				  LCD_UpdateTemperature(temperature);
+				  displayState = 1;
+				  break;
+			  case 1:
+				  LCD_UpdateHumidity(humidity);
+				  displayState = 2;
+				  break;
+			  case 2:
+				  LCD_UpdateLuminosity(luminosity);
+				  displayState = 0;
+				  break;
+		  }
+	  }
 
-	    	  //lastTimeSend += measurementInterval; // Incrementar en lugar de reiniciar
-	    	  sendDataToThingSpeak(THINGSPEAK_API_KEY, temperature, humidity, luminosity);
+	  if (currentTick - lastTimeSend >= measurementInterval) {
+		  lastTimeSend = currentTick;
+
+		  //lastTimeSend += measurementInterval; // Incrementar en lugar de reiniciar
+		  sendDataToThingSpeak(THINGSPEAK_API_KEY, temperature, humidity, luminosity);
 
 //	          LCD_Clear();
 //	          LCD_SetCursor(0, 0);
 //	          LCD_Print("DATOS A THINGSPEAK ");
 //	          LCD_SetCursor(1, 0);
 //	          LCD_Print("RECIBIDOS CORRECTAMENTE");
-	      }
+	  }
 
-	      processThingSpeakStateMachine(); // Procesar la máquina de estados de ThingSpeak
+	  processThingSpeakStateMachine(); // Procesar la máquina de estados de ThingSpeak
 
-
-
-	  //HAL_Delay(500);
 
   }
   /* USER CODE END 3 */
