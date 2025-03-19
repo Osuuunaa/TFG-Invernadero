@@ -1,6 +1,0 @@
-../Core/Src/wifi_thingspeak.c:20:6:sendATCommand	1
-../Core/Src/wifi_thingspeak.c:24:6:receiveResponse_IT	1
-../Core/Src/wifi_thingspeak.c:31:6:HAL_UART_RxCpltCallback	4
-../Core/Src/wifi_thingspeak.c:83:6:connectToWiFi	5
-../Core/Src/wifi_thingspeak.c:132:6:sendDataToThingSpeak	1
-../Core/Src/wifi_thingspeak.c:140:6:processThingSpeakStateMachine	8

@@ -1,4 +1,0 @@
-../Core/Src/veml7700.c:18:6:VEML7700_Init	1
-../Core/Src/veml7700.c:25:6:ReadVEML7700	1
-../Core/Src/veml7700.c:34:6:setLightAlarm	1
-../Core/Src/veml7700.c:39:6:calculateAverageLuminosity	2
