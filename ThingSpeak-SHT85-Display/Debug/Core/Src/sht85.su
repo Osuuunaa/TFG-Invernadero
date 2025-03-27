@@ -1,0 +1,6 @@
+../Core/Src/sht85.c:10:6:SHT85_Init	24	static
+../Core/Src/sht85.c:15:6:ReadSHT85_Periodic	40	static
+../Core/Src/sht85.c:29:6:SHT85_ErrorReset	16	static
+../Core/Src/sht85.c:47:6:ResetSHT85	24	static
+../Core/Src/sht85.c:61:6:calculatorAverageTemperature	16	static
+../Core/Src/sht85.c:71:6:calculatorAverageHumidity	16	static

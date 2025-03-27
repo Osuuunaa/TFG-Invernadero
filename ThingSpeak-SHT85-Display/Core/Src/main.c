@@ -22,6 +22,17 @@
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
+#include <stdio.h>
+#include <stdbool.h>
+#include "lcd.h"
+#include "sht85.h"
+#include "veml7700.h"
+#include "rele.h"
+
+#include "wifi_thingspeak.h"
+#include "mqtt_raspberry.h"
+#include "esp_8266.h"
+
 
 /* USER CODE END Includes */
 
@@ -32,6 +43,17 @@
 
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
+//#define WIFI_SSID "MOVISTAR_1DD2"
+//#define WIFI_PASS "55253A2D16DDBF32D47B"
+const char* WIFI_SSID = "MOVISTAR_1DD2";
+const char* WIFI_PASS = "55253A2D16DDBF32D47B";
+#define THINGSPEAK_API_KEY "6K0OKMK195CFJ8SQ"
+
+#define LUMINOSITY_THRESHOLD 1.5f
+#define MEASUREMENT_INTERVAL 1000 // 0.2 segundos. Frecuencia para tomar mediciones con los sensores
+#define DISPLAY_INTERVAL 3000 // 3 segundos. Frecuencia de muestreo de datos en el display
+#define SEND_THINGSPEAK_INTERVAL 20000 // 20 segundos. Linea 184 de system_stm32f4xx.c modificada manualmente
+#define WIFI_RESET_INTERVAL 3600000 // 1h en ms
 
 /* USER CODE END PD */
 
@@ -49,6 +71,18 @@ SPI_HandleTypeDef hspi1;
 UART_HandleTypeDef huart2;
 
 /* USER CODE BEGIN PV */
+float temperature = 0.0f;
+float averageTemperature = 0.0f;
+float humidity = 0.0f;
+float averageHumidity = 0.0f;
+float luminosity = 0.0f;
+float averageLuminosity = 0.0f;
+volatile uint32_t lastTimeMeasurement = 0;
+volatile uint32_t lastTimeDisplay = 0;
+volatile uint32_t lastTimeSend = 0;
+volatile uint32_t lastWiFiReset = 0;
+volatile uint8_t displayState = 0; // 0: Temperature, 1: Humidity, 2: Luminosity
+volatile bool releOn = false; // Variable global para monitorear el estado del relé
 
 /* USER CODE END PV */
 
@@ -60,11 +94,37 @@ static void MX_USART2_UART_Init(void);
 static void MX_I2C2_Init(void);
 static void MX_SPI1_Init(void);
 /* USER CODE BEGIN PFP */
+static void MX_NVIC_Init(void);
+const char* floatToStr(float num, int precision);
+void LCD_Update_Variables(float* temperature, float* humidity, float* luminosity);
 
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
+const char* floatToStr(float num, int precision) {
+    static char str[20]; // Buffer estático para almacenar la cadena resultante
+    sprintf(str, "%.*f", precision, num);
+    return str;
+}
+
+void LCD_Update_Variables(float* temperature, float* humidity, float* luminosity) {
+    const char* strTemp = floatToStr(*temperature, 2);
+    LCD_Clear();
+    LCD_SetCursor(0, 0);
+    LCD_Print("T:");
+    LCD_Print(strTemp);
+    //LCD_SendData(223);  // Enviar código ASCII del símbolo de grados para HD44780
+    LCD_Print("C | H:");
+    const char* strHum = floatToStr(*humidity, 0);
+    LCD_Print(strHum);
+    LCD_Print("%");
+    const char* strLux = floatToStr(*luminosity, 3);
+    LCD_SetCursor(1, 0);
+    LCD_Print("  L: ");
+	LCD_Print(strLux);
+	LCD_Print(" lux");
+}
 
 /* USER CODE END 0 */
 
@@ -76,7 +136,9 @@ int main(void)
 {
 
   /* USER CODE BEGIN 1 */
-
+  lastTimeMeasurement = HAL_GetTick();
+  lastTimeDisplay = HAL_GetTick();
+  lastTimeSend = HAL_GetTick();
   /* USER CODE END 1 */
 
   /* MCU Configuration--------------------------------------------------------*/
@@ -103,6 +165,26 @@ int main(void)
   MX_SPI1_Init();
   MX_FATFS_Init();
   /* USER CODE BEGIN 2 */
+  MX_NVIC_Init();
+
+  LCD_Init();
+  SHT85_Init();
+
+  HAL_Delay(500);
+
+  VEML7700_Init();
+  connectToWiFi(WIFI_SSID, WIFI_PASS);
+
+  if(isWiFiConnected() == 1){
+	LCD_Clear();
+	LCD_SetCursor(0, 0);
+	LCD_Print("Wifi conectado");
+	LCD_SetCursor(1, 0);
+	LCD_Print("correctamente");
+  }
+
+
+  Rele_Off(); // Relé inicializado en OFF
 
   /* USER CODE END 2 */
 
@@ -113,6 +195,60 @@ int main(void)
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
+
+	  uint32_t currentTick = HAL_GetTick();
+
+	  // Medición de sensores
+	  if (currentTick - lastTimeMeasurement >= MEASUREMENT_INTERVAL) {
+		  //lastTimeMeasurement = currentTick;
+		  lastTimeMeasurement += MEASUREMENT_INTERVAL; // Incrementar en lugar de reiniciar
+		  ReadSHT85_Periodic(&temperature, &humidity);
+		  calculatorAverageTemperature(temperature, &averageTemperature);
+		  calculatorAverageHumidity(humidity, &averageHumidity);
+		  SHT85_ErrorReset(&temperature, &humidity);
+
+		  ReadVEML7700(&luminosity);
+		  calculateAverageLuminosity(luminosity, &averageLuminosity);
+
+		  // Display LCD
+		  LCD_Update_Variables(&temperature, &humidity, &luminosity);
+
+
+		  // Controlar el rele basado en la luminosidad
+		  Control_Rele(luminosity);
+	  }
+
+
+
+	  // Envío de datos a ThingSpeak
+	  if (currentTick - lastTimeSend >= SEND_THINGSPEAK_INTERVAL) {
+		  //lastTimeSend = currentTick;
+
+		  lastTimeSend += SEND_THINGSPEAK_INTERVAL ; // es recomendable utilizar el método de acumulación para evitar deriva en el tiempo
+		  sendDataToThingSpeak(THINGSPEAK_API_KEY, averageTemperature, averageHumidity, averageLuminosity);
+
+		  // INICIO COMUNICACIÓN MQTT CON RASPBERRY
+		  // Activar MQTT si no lo está
+		  mqtt_raspberry_set_enabled(1);
+
+		  // Enviar los datos a la Pi en JSON
+		  mqtt_raspberry_send(temperature, humidity, luminosity);
+		  // FIN COMUNICACIÓN MQTT CON RASPBERRY
+	  }
+
+	  // Reseteo de la conexión ESP8266-router cada 1 hora para asegurar que no se sature
+	  if (currentTick - lastWiFiReset > WIFI_RESET_INTERVAL) {	//Forzando reinicio WiFi por mantenimiento
+		  esp8266_reset_and_reconnect(WIFI_SSID,WIFI_PASS);
+		  lastWiFiReset = HAL_GetTick();
+	 }
+
+	  processThingSpeakStateMachine(); // Procesar la máquina de estados de ThingSpeak
+
+	  // INICIO COMUNICACIÓN MQTT CON RASPBERRY
+	  mqtt_raspberry_process();
+	  // FIN COMUNICACIÓN MQTT CON RASPBERRY
+
+
   }
   /* USER CODE END 3 */
 }
@@ -254,7 +390,7 @@ static void MX_SPI1_Init(void)
   hspi1.Init.CLKPolarity = SPI_POLARITY_LOW;
   hspi1.Init.CLKPhase = SPI_PHASE_1EDGE;
   hspi1.Init.NSS = SPI_NSS_SOFT;
-  hspi1.Init.BaudRatePrescaler = SPI_BAUDRATEPRESCALER_2;
+  hspi1.Init.BaudRatePrescaler = SPI_BAUDRATEPRESCALER_8;
   hspi1.Init.FirstBit = SPI_FIRSTBIT_MSB;
   hspi1.Init.TIMode = SPI_TIMODE_DISABLE;
   hspi1.Init.CRCCalculation = SPI_CRCCALCULATION_DISABLE;
@@ -298,6 +434,7 @@ static void MX_USART2_UART_Init(void)
   }
   /* USER CODE BEGIN USART2_Init 2 */
 
+
   /* USER CODE END USART2_Init 2 */
 
 }
@@ -311,13 +448,13 @@ static void MX_GPIO_Init(void)
 {
   GPIO_InitTypeDef GPIO_InitStruct = {0};
   /* USER CODE BEGIN MX_GPIO_Init_1 */
-
   /* USER CODE END MX_GPIO_Init_1 */
 
   /* GPIO Ports Clock Enable */
   __HAL_RCC_GPIOC_CLK_ENABLE();
   __HAL_RCC_GPIOA_CLK_ENABLE();
   __HAL_RCC_GPIOB_CLK_ENABLE();
+  __HAL_RCC_GPIOD_CLK_ENABLE();
 
   /*Configure GPIO pin Output Level */
   HAL_GPIO_WritePin(GPIOC, GPIO_PIN_0|GPIO_PIN_1|GPIO_PIN_2|GPIO_PIN_3
@@ -327,7 +464,10 @@ static void MX_GPIO_Init(void)
   HAL_GPIO_WritePin(GPIOA, GPIO_PIN_4, GPIO_PIN_SET);
 
   /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(SIG_rele_GPIO_Port, SIG_rele_Pin, GPIO_PIN_RESET);
+  HAL_GPIO_WritePin(GPIOD, GPIO_PIN_12|GPIO_PIN_14, GPIO_PIN_RESET);
+
+  /*Configure GPIO pin Output Level */
+  HAL_GPIO_WritePin(GPIOB, GPIO_PIN_5, GPIO_PIN_RESET);
 
   /*Configure GPIO pins : PC0 PC1 PC2 PC3
                            PC4 PC5 */
@@ -345,20 +485,31 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_HIGH;
   HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
 
-  /*Configure GPIO pin : SIG_rele_Pin */
-  GPIO_InitStruct.Pin = SIG_rele_Pin;
+  /*Configure GPIO pins : PD12 PD14 */
+  GPIO_InitStruct.Pin = GPIO_PIN_12|GPIO_PIN_14;
   GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
-  HAL_GPIO_Init(SIG_rele_GPIO_Port, &GPIO_InitStruct);
+  HAL_GPIO_Init(GPIOD, &GPIO_InitStruct);
+
+  /*Configure GPIO pin : PB5 */
+  GPIO_InitStruct.Pin = GPIO_PIN_5;
+  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+  HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
 
   /* USER CODE BEGIN MX_GPIO_Init_2 */
-
   /* USER CODE END MX_GPIO_Init_2 */
 }
 
 /* USER CODE BEGIN 4 */
-
+static void MX_NVIC_Init(void)
+{
+  /* USART2_IRQn interrupt configuration */
+  HAL_NVIC_SetPriority(USART2_IRQn, 0, 0);
+  HAL_NVIC_EnableIRQ(USART2_IRQn); // Habilitar interrupciones globales USART2 para ESP8266
+}
 /* USER CODE END 4 */
 
 /**
