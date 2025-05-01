@@ -77,6 +77,7 @@ float humidity = 0.0f;
 float averageHumidity = 0.0f;
 float luminosity = 0.0f;
 float averageLuminosity = 0.0f;
+uint8_t countAverage = 0;
 volatile uint32_t lastTimeMeasurement = 0;
 volatile uint32_t lastTimeDisplay = 0;
 volatile uint32_t lastTimeSend = 0;
@@ -168,6 +169,9 @@ int main(void)
   MX_NVIC_Init();
 
   LCD_Init();
+  //ResetSHT85();      // Añade esto antes de iniciar en modo periódico
+
+
   SHT85_Init();
 
   HAL_Delay(500);
@@ -202,13 +206,19 @@ int main(void)
 	  if (currentTick - lastTimeMeasurement >= MEASUREMENT_INTERVAL) {
 		  //lastTimeMeasurement = currentTick;
 		  lastTimeMeasurement += MEASUREMENT_INTERVAL; // Incrementar en lugar de reiniciar
-		  ReadSHT85_Periodic(&temperature, &humidity);
-		  calculatorAverageTemperature(temperature, &averageTemperature);
-		  calculatorAverageHumidity(humidity, &averageHumidity);
+		  //ReadSHT85_Periodic(&temperature, &humidity);
+		  SHT85_ReadSingleShot(&temperature, &humidity);
+
+		  //calculatorAverageTemperature(temperature, &averageTemperature);
+		  //calculatorAverageHumidity(humidity, &averageHumidity);
 		  SHT85_ErrorReset(&temperature, &humidity);
 
 		  ReadVEML7700(&luminosity);
-		  calculateAverageLuminosity(luminosity, &averageLuminosity);
+		  averageTemperature += temperature;
+		  averageHumidity += humidity;
+		  averageLuminosity += luminosity;
+		  countAverage++;
+		  //calculateAverageLuminosity(luminosity, &averageLuminosity);
 
 		  // Display LCD
 		  LCD_Update_Variables(&temperature, &humidity, &luminosity);
@@ -220,19 +230,35 @@ int main(void)
 
 
 
+
 	  // Envío de datos a ThingSpeak
 	  if (currentTick - lastTimeSend >= SEND_THINGSPEAK_INTERVAL) {
 		  //lastTimeSend = currentTick;
+		  if(countAverage == 0) {
+			  averageTemperature = temperature;
+			  averageHumidity = humidity;
+			  averageLuminosity = luminosity;
+		  } else {
+			  averageTemperature = averageTemperature/countAverage;
+			  averageHumidity = averageHumidity/countAverage;
+			  averageLuminosity = averageLuminosity/countAverage;
+		  }
 
 		  lastTimeSend += SEND_THINGSPEAK_INTERVAL ; // es recomendable utilizar el método de acumulación para evitar deriva en el tiempo
-		  sendDataToThingSpeak(THINGSPEAK_API_KEY, averageTemperature, averageHumidity, averageLuminosity);
+		  //sendDataToThingSpeak(THINGSPEAK_API_KEY, averageTemperature, averageHumidity, averageLuminosity);
+		  sendDataToThingSpeak(THINGSPEAK_API_KEY, temperature, humidity, luminosity);
 
+		  averageTemperature = 0.0f;
+		  averageHumidity = 0.0f;
+		  averageLuminosity = 0.0f;
+		  countAverage = 0;
 		  // INICIO COMUNICACIÓN MQTT CON RASPBERRY
 		  // Activar MQTT si no lo está
-		  mqtt_raspberry_set_enabled(1);
+		  //mqtt_raspberry_set_enabled(1);
 
 		  // Enviar los datos a la Pi en JSON
-		  mqtt_raspberry_send(temperature, humidity, luminosity);
+		  //mqtt_raspberry_send(temperature, humidity, luminosity);
+
 		  // FIN COMUNICACIÓN MQTT CON RASPBERRY
 	  }
 
@@ -245,9 +271,8 @@ int main(void)
 	  processThingSpeakStateMachine(); // Procesar la máquina de estados de ThingSpeak
 
 	  // INICIO COMUNICACIÓN MQTT CON RASPBERRY
-	  mqtt_raspberry_process();
+	  //mqtt_raspberry_process();
 	  // FIN COMUNICACIÓN MQTT CON RASPBERRY
-
 
   }
   /* USER CODE END 3 */

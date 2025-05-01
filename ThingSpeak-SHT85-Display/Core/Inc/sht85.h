@@ -14,7 +14,9 @@ extern float totalTemperature;
 extern uint8_t sampleCount;
 
 void SHT85_Init();
-void ReadSHT85_Periodic(float* temperature, float* humidity);
+void SHT85_ReadSingleShot(float* temperature, float* humidity);
+
+//void ReadSHT85_Periodic(float* temperature, float* humidity);
 void SHT85_ErrorReset(float* temperature, float* humidity);
 void ResetSHT85();
 void calculatorAverageTemperature(float newTemperature, float* averageTemperature);

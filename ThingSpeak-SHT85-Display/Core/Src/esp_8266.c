@@ -31,8 +31,18 @@ uint8_t esp8266_is_response_ready(void) { 	//Verifica si la respuesta del ESP826
 }
 
 char* esp8266_get_response(void) {		// Devuelve el contenido de la respuesta recibida del ESP8266
-    return response;
+	return response;
 }
+
+//char* esp8266_get_response(void) {
+//    static char temp[256];
+//    strncpy(temp, response, sizeof(temp) - 1);
+//    temp[sizeof(temp) - 1] = '\0';
+//    memset(response, 0, sizeof(response));  // Limpiar después de copiar
+//    return temp;
+//}
+
+
 
 void esp8266_clear_response_flag(void) {		// Limpia la bandera que indica que la respuesta ha sido recibida
     rxComplete = 0;

@@ -1,3 +1,5 @@
-../Core/Src/mqtt_raspberry.c:30:6:mqtt_raspberry_set_enabled	1
-../Core/Src/mqtt_raspberry.c:34:6:mqtt_raspberry_send	1
-../Core/Src/mqtt_raspberry.c:41:6:mqtt_raspberry_process	17
+../Core/Src/mqtt_raspberry.c:32:6:mqtt_raspberry_set_enabled	1
+../Core/Src/mqtt_raspberry.c:36:6:mqtt_raspberry_send	1
+../Core/Src/mqtt_raspberry.c:43:13:mqtt_publish_unified_json	1
+../Core/Src/mqtt_raspberry.c:65:13:mqtt_send_connect_packet	1
+../Core/Src/mqtt_raspberry.c:101:6:mqtt_raspberry_process	18

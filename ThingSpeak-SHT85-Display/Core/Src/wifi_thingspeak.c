@@ -21,10 +21,12 @@ void connectToWiFi(const char* ssid, const char* password) {	// Configura y cone
 	esp8266_receive_response_IT();
 	esp8266_clear_response_flag();	// rxComplete = 0;
 
+
     // Reiniciar el ESP8266
 	esp8266_send_command("AT+RST\r\n");
 	esp8266_receive_response_IT();
 	esp8266_clear_response_flag();	// rxComplete = 0;
+
 
     // Configurar modo Station
 	esp8266_send_command("AT+CWMODE=1\r\n");

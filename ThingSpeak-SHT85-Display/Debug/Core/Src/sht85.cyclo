@@ -1,6 +1,7 @@
-../Core/Src/sht85.c:10:6:SHT85_Init	1
-../Core/Src/sht85.c:15:6:ReadSHT85_Periodic	1
-../Core/Src/sht85.c:29:6:SHT85_ErrorReset	4
-../Core/Src/sht85.c:47:6:ResetSHT85	1
-../Core/Src/sht85.c:61:6:calculatorAverageTemperature	2
-../Core/Src/sht85.c:71:6:calculatorAverageHumidity	2
+../Core/Src/sht85.c:115:6:SHT85_Init	1
+../Core/Src/sht85.c:120:9:SHT85_CalculateCRC	4
+../Core/Src/sht85.c:134:6:SHT85_ReadSingleShot	3
+../Core/Src/sht85.c:154:6:SHT85_ErrorReset	4
+../Core/Src/sht85.c:169:6:ResetSHT85	1
+../Core/Src/sht85.c:175:6:calculatorAverageTemperature	4
+../Core/Src/sht85.c:196:6:calculatorAverageHumidity	4
