@@ -2,6 +2,7 @@
 #define __WIFI_THINGSPEAK_H
 
 #include "stm32f4xx_hal.h"
+#include "esp_8266.h"
 
 extern const char* WIFI_SSID;
 extern const char* WIFI_PASS;

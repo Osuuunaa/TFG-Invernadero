@@ -11,20 +11,37 @@
 
 extern UART_HandleTypeDef huart2;
 
-static char response[256];  // Buffer para almacenar la respuesta
-static volatile uint8_t rxIndex = 0; // Índice de recepción
-static volatile uint8_t rxComplete = 0; // Bandera de recepción completa
 
-void esp8266_send_command(const char* cmd) {		// Envía un comando AT al ESP8266 a través de UART
+// Callback de recepción por interrupción
+void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart) {
+    if (huart->Instance == USART2) {  // Verificar si es el UART correcto
+        if (rxIndex < sizeof(response) - 1) {  // Evitar desbordamiento del buffer
+            rxIndex++;  // Avanzar índice
+            if (response[rxIndex - 1] == '\n') {  // Detectar fin de línea
+                rxComplete = 1;  // Marcar recepción completa
+            } else {
+                HAL_UART_Receive_IT(&huart2, (uint8_t*)&response[rxIndex], 1);  // Recibir siguiente byte
+            }
+        } else {
+            rxComplete = 1;  // Si se llena el buffer, finalizar recepción
+        }
+    }
+}
+
+// Inicia la recepción por interrupción
+void esp8266_receive_response_IT(void) {
+    rxIndex = 0;  // Reiniciar índice
+    rxComplete = 0;  // Limpiar bandera de recepción completa
+    memset(response, 0, sizeof(response));  // Limpiar el buffer
+    HAL_UART_Receive_IT(&huart2, (uint8_t*)&response[rxIndex], 1);  // Recibir primer byte
+}
+
+
+// Envía un comando al ESP8266
+void esp8266_send_command(const char* cmd) {
     HAL_UART_Transmit(&huart2, (uint8_t*)cmd, strlen(cmd), HAL_MAX_DELAY);
 }
 
-void esp8266_receive_response_IT(void) {	//Prepara la recepción de una respuesta del ESP8266 utilizando interrupciones
-	rxIndex = 0;  // Reiniciar índice
-	rxComplete = 0;  // Limpiar bandera de recepción completa
-	memset(response, 0, sizeof(response));  // Limpiar el buffer
-	HAL_UART_Receive_IT(&huart2, (uint8_t*)&response[rxIndex], 1);  // Recibir primer byte
-}
 
 uint8_t esp8266_is_response_ready(void) { 	//Verifica si la respuesta del ESP8266 está lista
     return rxComplete;		//En lugar de acceder directamente a rxComplete (que es static y privado en esp8266.c), accedes por función.
@@ -77,17 +94,3 @@ void esp8266_reset_and_reconnect(const char* ssid, const char* password) {
 }
 
 
-void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart) {	//Callback que se activa cuando se recibe un byte de datos a través de UART
-	if (huart->Instance == USART2) {  // Verificar si es el UART correcto
-		if (rxIndex < sizeof(response) - 1) {  // Evitar desbordamiento del buffer
-			rxIndex++;  // Avanzar índice
-			if (response[rxIndex - 1] == '\n') {  // Detecta el fin de la respuesta
-				rxComplete = 1;  // Marcar recepción completa
-			} else {
-				HAL_UART_Receive_IT(&huart2, (uint8_t*)&response[rxIndex], 1);  // Recibir siguiente byte
-			}
-		} else {
-			rxComplete = 1;  // Si se llena el buffer, finalizar recepción
-		}
-	}
-}

@@ -12,6 +12,10 @@
 #include "stm32f4xx_hal.h"
 #include <stdbool.h>
 
+static volatile char response[512];  // Buffer para almacenar la respuesta
+static volatile uint8_t rxIndex = 0; // Índice de recepción
+static volatile uint8_t rxComplete = 0; // Bandera de recepción completa
+
 void esp8266_send_command(const char* cmd);
 void esp8266_receive_response_IT(void);
 uint8_t esp8266_is_response_ready(void);
@@ -22,6 +26,7 @@ void esp8266_deep_sleep(uint32_t sleep_time_ms);
 void esp8266_reset_and_reconnect(const char* ssid, const char* password);
 
 void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart);
+
 
 
 

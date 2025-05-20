@@ -85,6 +85,8 @@ volatile uint32_t lastWiFiReset = 0;
 volatile uint8_t displayState = 0; // 0: Temperature, 1: Humidity, 2: Luminosity
 volatile bool releOn = false; // Variable global para monitorear el estado del relé
 
+uint32_t marblack = 0;
+
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -103,6 +105,17 @@ void LCD_Update_Variables(float* temperature, float* humidity, float* luminosity
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
+
+int _write(int file, char *ptr, int len){
+	int i=0;
+	for (i=0; i<len;i++){
+		ITM_SendChar((*ptr));
+
+	}
+	return len;
+}
+
+
 const char* floatToStr(float num, int precision) {
     static char str[20]; // Buffer estático para almacenar la cadena resultante
     sprintf(str, "%.*f", precision, num);
@@ -179,6 +192,10 @@ int main(void)
   VEML7700_Init();
   connectToWiFi(WIFI_SSID, WIFI_PASS);
 
+
+
+  printf("Inicio");
+
   if(isWiFiConnected() == 1){
 	LCD_Clear();
 	LCD_SetCursor(0, 0);
@@ -202,6 +219,8 @@ int main(void)
 
 	  uint32_t currentTick = HAL_GetTick();
 
+	  printf("Bucle...");
+	  HAL_Delay(100);
 	  // Medición de sensores
 	  if (currentTick - lastTimeMeasurement >= MEASUREMENT_INTERVAL) {
 		  //lastTimeMeasurement = currentTick;
@@ -228,12 +247,16 @@ int main(void)
 		  Control_Rele(luminosity);
 	  }
 
+	  printf("Hola desde SWV ITM\n");
+	  HAL_Delay(100);
+
 
 
 
 	  // Envío de datos a ThingSpeak
 	  if (currentTick - lastTimeSend >= SEND_THINGSPEAK_INTERVAL) {
 		  //lastTimeSend = currentTick;
+
 		  if(countAverage == 0) {
 			  averageTemperature = temperature;
 			  averageHumidity = humidity;
@@ -264,9 +287,9 @@ int main(void)
 
 	  // Reseteo de la conexión ESP8266-router cada 1 hora para asegurar que no se sature
 	  if (currentTick - lastWiFiReset > WIFI_RESET_INTERVAL) {	//Forzando reinicio WiFi por mantenimiento
-		  esp8266_reset_and_reconnect(WIFI_SSID,WIFI_PASS);
 		  lastWiFiReset = HAL_GetTick();
-	 }
+		  esp8266_reset_and_reconnect(WIFI_SSID,WIFI_PASS);
+	  }
 
 	  processThingSpeakStateMachine(); // Procesar la máquina de estados de ThingSpeak
 
@@ -301,7 +324,7 @@ void SystemClock_Config(void)
   RCC_OscInitStruct.PLL.PLLState = RCC_PLL_ON;
   RCC_OscInitStruct.PLL.PLLSource = RCC_PLLSOURCE_HSI;
   RCC_OscInitStruct.PLL.PLLM = 8;
-  RCC_OscInitStruct.PLL.PLLN = 50;
+  RCC_OscInitStruct.PLL.PLLN = 80;
   RCC_OscInitStruct.PLL.PLLP = RCC_PLLP_DIV2;
   RCC_OscInitStruct.PLL.PLLQ = 8;
   if (HAL_RCC_OscConfig(&RCC_OscInitStruct) != HAL_OK)
@@ -315,10 +338,10 @@ void SystemClock_Config(void)
                               |RCC_CLOCKTYPE_PCLK1|RCC_CLOCKTYPE_PCLK2;
   RCC_ClkInitStruct.SYSCLKSource = RCC_SYSCLKSOURCE_PLLCLK;
   RCC_ClkInitStruct.AHBCLKDivider = RCC_SYSCLK_DIV1;
-  RCC_ClkInitStruct.APB1CLKDivider = RCC_HCLK_DIV4;
+  RCC_ClkInitStruct.APB1CLKDivider = RCC_HCLK_DIV2;
   RCC_ClkInitStruct.APB2CLKDivider = RCC_HCLK_DIV1;
 
-  if (HAL_RCC_ClockConfig(&RCC_ClkInitStruct, FLASH_LATENCY_1) != HAL_OK)
+  if (HAL_RCC_ClockConfig(&RCC_ClkInitStruct, FLASH_LATENCY_2) != HAL_OK)
   {
     Error_Handler();
   }
@@ -529,6 +552,12 @@ static void MX_GPIO_Init(void)
 }
 
 /* USER CODE BEGIN 4 */
+
+int __io_putchar(int ch) {
+    ITM_SendChar(ch);
+    return ch;
+}
+
 static void MX_NVIC_Init(void)
 {
   /* USART2_IRQn interrupt configuration */
