@@ -42,10 +42,74 @@ void mqtt_raspberry_send(float t, float h, float l) {
     mqttState = 1;
 }
 
+//static void mqtt_send_connect_packet(void) {
+//    const char* clientId = MQTT_CLIENT_ID;
+//    const char* username = MQTT_USERNAME;
+//    const char* password = MQTT_PASSWORD;
+//
+//    uint8_t packet[256];
+//    uint8_t idx = 0;
+//
+//    packet[idx++] = 0x10;  // CONNECT
+//    uint8_t remLenPos = idx++;  // Placeholder for Remaining Length
+//
+//    // Variable header
+//    packet[idx++] = 0x00; packet[idx++] = 0x04;
+//    packet[idx++] = 'M'; packet[idx++] = 'Q'; packet[idx++] = 'T'; packet[idx++] = 'T';
+//    packet[idx++] = 0x04;      // Protocol level 4
+//
+////    packet[idx++] = 0xC2;      // Flags: username + password + clean session
+////    packet[idx++] = 0xC0;
+//    packet[idx++] = 0x02;  // Solo Clean Session
+//
+//
+//    packet[idx++] = 0x00; packet[idx++] = 0x3C;  // Keep Alive: 60s
+//
+//    // Payload
+//    packet[idx++] = 0x00;
+//    packet[idx++] = strlen(clientId);
+//    memcpy(&packet[idx], clientId, strlen(clientId));
+//    idx += strlen(clientId);
+//
+////    packet[idx++] = 0x00; packet[idx++] = strlen(username);
+////    memcpy(&packet[idx], username, strlen(username)); idx += strlen(username);
+////
+////    packet[idx++] = 0x00; packet[idx++] = strlen(password);
+////    memcpy(&packet[idx], password, strlen(password)); idx += strlen(password);
+//
+//
+//
+//    packet[remLenPos] = idx - 2; // MQTT remaining length (OK si <127)
+//    // Codificar Remaining Length (variable-length encoding)
+////    uint32_t len = idx - 2;
+////    uint8_t len_bytes[4];
+////    uint8_t len_idx = 0;
+////
+////    do {
+////        uint8_t byte = len % 128;
+////        len /= 128;
+////        if (len > 0) byte |= 0x80;
+////        len_bytes[len_idx++] = byte;
+////    } while (len > 0);
+////
+////    // Mover el payload para hacer hueco
+////    memmove(&packet[remLenPos + len_idx], &packet[remLenPos + 1], idx - (remLenPos + 1));
+////    memcpy(&packet[remLenPos], len_bytes, len_idx);
+////    idx += (len_idx - 1);
+//
+//
+//
+//    // Enviar por AT+CIPSEND
+//    char cmd[32];
+//    sprintf(cmd, "AT+CIPSEND=%d\r\n", idx);
+//    esp8266_send_command(cmd);
+//    esp8266_wait_response_timeout(3000);
+//
+//    HAL_UART_Transmit(&huart2, packet, idx, HAL_MAX_DELAY);
+//}
+
 static void mqtt_send_connect_packet(void) {
     const char* clientId = MQTT_CLIENT_ID;
-    const char* username = MQTT_USERNAME;
-    const char* password = MQTT_PASSWORD;
 
     uint8_t packet[256];
     uint8_t idx = 0;
@@ -56,43 +120,20 @@ static void mqtt_send_connect_packet(void) {
     // Variable header
     packet[idx++] = 0x00; packet[idx++] = 0x04;
     packet[idx++] = 'M'; packet[idx++] = 'Q'; packet[idx++] = 'T'; packet[idx++] = 'T';
-    packet[idx++] = 0x04;      // Protocol level 4
+    packet[idx++] = 0x05;      // Protocol level 5 (MQTT 5.0)
 
-//    packet[idx++] = 0xC2;      // Flags: username + password + clean session
-    packet[idx++] = 0xC0;
-
-
+    packet[idx++] = 0x02;      // Flags: Solo Clean Session
     packet[idx++] = 0x00; packet[idx++] = 0x3C;  // Keep Alive: 60s
+
+    // MQTT 5: Añadir campo "Properties" (de longitud 0)
+    packet[idx++] = 0x00;      // Properties length (0 = no properties)
 
     // Payload
     packet[idx++] = 0x00; packet[idx++] = strlen(clientId);
     memcpy(&packet[idx], clientId, strlen(clientId)); idx += strlen(clientId);
 
-    packet[idx++] = 0x00; packet[idx++] = strlen(username);
-    memcpy(&packet[idx], username, strlen(username)); idx += strlen(username);
-
-    packet[idx++] = 0x00; packet[idx++] = strlen(password);
-    memcpy(&packet[idx], password, strlen(password)); idx += strlen(password);
-
-//    packet[remLenPos] = idx - 2; // MQTT remaining length (OK si <127)
-    // Codificar Remaining Length (variable-length encoding)
-    uint32_t len = idx - 2;
-    uint8_t len_bytes[4];
-    uint8_t len_idx = 0;
-
-    do {
-        uint8_t byte = len % 128;
-        len /= 128;
-        if (len > 0) byte |= 0x80;
-        len_bytes[len_idx++] = byte;
-    } while (len > 0);
-
-    // Mover el payload para hacer hueco
-    memmove(&packet[remLenPos + len_idx], &packet[remLenPos + 1], idx - (remLenPos + 1));
-    memcpy(&packet[remLenPos], len_bytes, len_idx);
-    idx += (len_idx - 1);
-
-
+    // Rellenar remaining length (solo válido para paquetes <127 bytes)
+    packet[remLenPos] = idx - 2; // MQTT remaining length (OK si <127)
 
     // Enviar por AT+CIPSEND
     char cmd[32];
@@ -109,7 +150,9 @@ static void mqtt_publish_unified_json(const char* topic) {
 
     uint16_t topicLen = strlen(topic);
     uint16_t payloadLen = strlen(payload);
-    uint16_t msgLen = 2 + topicLen + payloadLen;
+
+    // +2 -> longitud del tema, +topicLen -> nombre del tema, +1 -> propiedades (MQTT 5), +payloadLen -> datos
+    uint16_t msgLen = 2 + topicLen + 1 + payloadLen;
 
     uint8_t header[5];
     uint8_t hdrLen = 0;
@@ -130,9 +173,16 @@ static void mqtt_publish_unified_json(const char* topic) {
 
     HAL_UART_Transmit(&huart2, header, hdrLen, HAL_MAX_DELAY);
 
+    // Nombre del tema
     uint8_t topicLenBytes[2] = { topicLen >> 8, topicLen & 0xFF };
     HAL_UART_Transmit(&huart2, topicLenBytes, 2, HAL_MAX_DELAY);
     HAL_UART_Transmit(&huart2, (uint8_t*)topic, topicLen, HAL_MAX_DELAY);
+
+    // Propiedades (MQTT 5) -- longitud 0
+    uint8_t propertiesLen = 0x00;
+    HAL_UART_Transmit(&huart2, &propertiesLen, 1, HAL_MAX_DELAY);
+
+    // Payload
     HAL_UART_Transmit(&huart2, (uint8_t*)payload, payloadLen, HAL_MAX_DELAY);
 }
 
@@ -150,31 +200,41 @@ static uint8_t mqtt_wait_connack(void) {
 }
 
 void mqtt_raspberry_process(void) {
-    if (!mqttEnabled) return;
+//    if (!mqttEnabled) return;
 
     static uint32_t stateTimeout = 0;
 
     switch (mqttState) {
         case 1: {
             // Cierra cualquier conexión previa (mejor limpieza)
-            esp8266_send_command("AT+CIPCLOSE\r\n");
-            esp8266_wait_response_timeout(1500);
+//            esp8266_send_command("AT+CIPCLOSE\r\n");
+//            mqttState = 9;
+//            HAL_Delay(1500);
+//            esp8266_wait_response_timeout(1500);
 
+//            mqttState = 10;
             char cmd[64];
             sprintf(cmd, "AT+CIPSTART=\"TCP\",\"%s\",%d\r\n", MQTT_BROKER_IP, MQTT_BROKER_PORT);
+            mqttState = 11;
             esp8266_send_command(cmd);
             esp8266_receive_response_IT();
             stateTimeout = HAL_GetTick();
             mqttState = 2;
+            memset(response, 0, sizeof(response));  // Limpiar el buffer
             break;
         }
         case 2: {
             if (esp8266_is_response_ready()) {
+
                 esp8266_clear_response_flag();
+
                 char* resp = esp8266_get_response();
-                if (strstr(resp, "CONNECT") || strstr(resp, "ALREADY CONNECTED")) {
+
+                if (strstr(resp, "CONNECT") || strstr(resp, "ALREADY CONNECTED") || strstr(resp, "AAT+CIPSTART=\"TCP\",\"192.168.1.220\",1883")) {
                     mqttState = 3;
-                } else {
+                    memset(response, 0, sizeof(response));  // Limpiar el buffer
+                }
+                else {
                     printf("Error conectando al broker\r\n");
                     mqttState = 0;
                 }
@@ -184,32 +244,36 @@ void mqtt_raspberry_process(void) {
             }
             break;
         }
-        case 3: {
+        case 3: {		// MANDA EL CONNECT
             mqtt_send_connect_packet();
             // Espera a que el ESP8266 mande "SEND OK" antes de leer CONNACK
             esp8266_receive_response_IT();
             stateTimeout = HAL_GetTick();
             mqttState = 4;
+            memset(response, 0, sizeof(response));  // Limpiar el buffer
             break;
         }
-        case 4: {
+        case 4: {		// ESPERA AL CONNACK
             if (esp8266_is_response_ready()) {
+            	mqttState = 50;
                 esp8266_clear_response_flag();
                 // Importante: leer CONNACK binario MQTT
-                if (mqtt_wait_connack()) {
-                    printf("MQTT conectado\r\n");
-                    mqttState = 5;
-                } else {
-                    printf("CONNACK inválido\r\n");
-                    mqttState = 0;
-                }
+//                if (mqtt_wait_connack()) {
+//                    printf("MQTT conectado\r\n");
+//                    mqttState = 5;
+//                } else {
+//                    printf("CONNACK inválido\r\n");
+//                    mqttState = 0;
+//                }
+
+                mqttState = 5;
             } else if (HAL_GetTick() - stateTimeout > 2000) {
                 printf("Timeout esperando CONNACK\r\n");
                 mqttState = 0;
             }
             break;
         }
-        case 5: {
+        case 5: {		// MANDA EL PUBLISH
             mqtt_publish_unified_json(MQTT_TOPIC_JSON);
             esp8266_receive_response_IT(); // Espera a "SEND OK"
             mqttState = 6;
@@ -235,7 +299,7 @@ void mqtt_raspberry_process(void) {
             break;
         }
         default:
-            mqttState = 0;
+//            mqttState = 0;
             mqttEnabled = 0;
             break;
     }

@@ -278,13 +278,11 @@ int main(void)
 		  Control_Rele(luminosity);
 	  }
 
-//	  printf("Hola desde SWV ITM \r\n");
 
-//	  HAL_Delay(1000);
 
 
 	  // Envío de datos a ThingSpeak
-	  if (currentTick - lastThingSpeakSend >= SEND_THINGSPEAK_INTERVAL) {
+	  /*if (currentTick - lastThingSpeakSend >= SEND_THINGSPEAK_INTERVAL) {
 		  //lastTimeSend = currentTick;
 
 		  if(countAverage == 0) {
@@ -314,7 +312,7 @@ int main(void)
 
 		  // FIN COMUNICACIÓN MQTT CON RASPBERRY
 	  }
-
+*/
 	  // Envío de datos MQTT cada X segundos
 	  	  if (currentTick - lastMQTTSend >= SEND_MQTT_INTERVAL) {
 	  		  marblack = 10;
@@ -329,8 +327,8 @@ int main(void)
 	  		  mqtt_raspberry_set_enabled(1);
 	  		  mqtt_raspberry_send(t, h, l);
 
-	  		  // Espera a que termine el envío (opcional, puedes dejar que corra en background)
-	  		  while (mqtt_raspberry_is_busy()) {
+	  		  // Espera a que termine el envío
+	  		  while (mqtt_raspberry_is_busy() == 1) {
 	  			  mqtt_raspberry_process();
 	  			  HAL_Delay(10);
 	  		  }
