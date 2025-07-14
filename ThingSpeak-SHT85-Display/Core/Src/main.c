@@ -53,6 +53,8 @@ const char* WIFI_PASS = "55253A2D16DDBF32D47B";
 #define MEASUREMENT_INTERVAL 1000 // 0.2 segundos. Frecuencia para tomar mediciones con los sensores
 #define DISPLAY_INTERVAL 3000 // 3 segundos. Frecuencia de muestreo de datos en el display
 #define SEND_THINGSPEAK_INTERVAL 20000 // 20 segundos. Linea 184 de system_stm32f4xx.c modificada manualmente
+#define SEND_MQTT_INTERVAL 8000 // 20 segundos. Linea 184 de system_stm32f4xx.c modificada manualmente
+
 #define WIFI_RESET_INTERVAL 3600000 // 1h en ms
 
 /* USER CODE END PD */
@@ -80,7 +82,8 @@ float averageLuminosity = 0.0f;
 uint8_t countAverage = 0;
 volatile uint32_t lastTimeMeasurement = 0;
 volatile uint32_t lastTimeDisplay = 0;
-volatile uint32_t lastTimeSend = 0;
+volatile uint32_t lastThingSpeakSend = 0;
+volatile uint32_t lastMQTTSend = 0;
 volatile uint32_t lastWiFiReset = 0;
 volatile uint8_t displayState = 0; // 0: Temperature, 1: Humidity, 2: Luminosity
 volatile bool releOn = false; // Variable global para monitorear el estado del relé
@@ -105,6 +108,13 @@ void LCD_Update_Variables(float* temperature, float* humidity, float* luminosity
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
+
+int __io_putchar(int ch) {
+    ITM_SendChar(ch);
+    return ch;
+}
+
+
 
 int _write(int file, char *ptr, int len){
 	int i=0;
@@ -152,7 +162,8 @@ int main(void)
   /* USER CODE BEGIN 1 */
   lastTimeMeasurement = HAL_GetTick();
   lastTimeDisplay = HAL_GetTick();
-  lastTimeSend = HAL_GetTick();
+  lastThingSpeakSend = HAL_GetTick();
+  lastMQTTSend = HAL_GetTick();
   /* USER CODE END 1 */
 
   /* MCU Configuration--------------------------------------------------------*/
@@ -161,6 +172,10 @@ int main(void)
   HAL_Init();
 
   /* USER CODE BEGIN Init */
+  // Habilitar el ITM y DWT (necesario para printf por SWO). NO ESTOY SEGURO SI HAY QUE PONERLO. LO DICE CHATGPT
+  CoreDebug->DEMCR |= CoreDebug_DEMCR_TRCENA_Msk;  // Enable TRC
+  DWT->CTRL |= DWT_CTRL_CYCCNTENA_Msk;             // Enable DWT cycle counter
+
 
   /* USER CODE END Init */
 
@@ -193,9 +208,6 @@ int main(void)
   connectToWiFi(WIFI_SSID, WIFI_PASS);
 
 
-
-  printf("Inicio");
-
   if(isWiFiConnected() == 1){
 	LCD_Clear();
 	LCD_SetCursor(0, 0);
@@ -204,8 +216,10 @@ int main(void)
 	LCD_Print("correctamente");
   }
 
+  printf("Inicio del programa...\n");
 
   Rele_Off(); // Relé inicializado en OFF
+
 
   /* USER CODE END 2 */
 
@@ -219,8 +233,25 @@ int main(void)
 
 	  uint32_t currentTick = HAL_GetTick();
 
-	  printf("Bucle...");
-	  HAL_Delay(100);
+	  // Chequea el WiFi periódicamente
+//	  if (!isWiFiConnected()) {
+//		  connectToWiFi(WIFI_SSID, WIFI_PASS);
+//	  }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 	  // Medición de sensores
 	  if (currentTick - lastTimeMeasurement >= MEASUREMENT_INTERVAL) {
 		  //lastTimeMeasurement = currentTick;
@@ -247,14 +278,13 @@ int main(void)
 		  Control_Rele(luminosity);
 	  }
 
-	  printf("Hola desde SWV ITM\n");
-	  HAL_Delay(100);
+//	  printf("Hola desde SWV ITM \r\n");
 
-
+//	  HAL_Delay(1000);
 
 
 	  // Envío de datos a ThingSpeak
-	  if (currentTick - lastTimeSend >= SEND_THINGSPEAK_INTERVAL) {
+	  if (currentTick - lastThingSpeakSend >= SEND_THINGSPEAK_INTERVAL) {
 		  //lastTimeSend = currentTick;
 
 		  if(countAverage == 0) {
@@ -267,7 +297,7 @@ int main(void)
 			  averageLuminosity = averageLuminosity/countAverage;
 		  }
 
-		  lastTimeSend += SEND_THINGSPEAK_INTERVAL ; // es recomendable utilizar el método de acumulación para evitar deriva en el tiempo
+		  lastThingSpeakSend += SEND_THINGSPEAK_INTERVAL ; // es recomendable utilizar el método de acumulación para evitar deriva en el tiempo
 		  //sendDataToThingSpeak(THINGSPEAK_API_KEY, averageTemperature, averageHumidity, averageLuminosity);
 		  sendDataToThingSpeak(THINGSPEAK_API_KEY, temperature, humidity, luminosity);
 
@@ -284,6 +314,35 @@ int main(void)
 
 		  // FIN COMUNICACIÓN MQTT CON RASPBERRY
 	  }
+
+	  // Envío de datos MQTT cada X segundos
+	  	  if (currentTick - lastMQTTSend >= SEND_MQTT_INTERVAL) {
+	  		  marblack = 10;
+	  		lastMQTTSend += SEND_MQTT_INTERVAL;
+
+	  		  // Si tienes medias, cámbialo por tus promedios aquí
+	  		  float t = temperature;
+	  		  float h = humidity;
+	  		  float l = luminosity;
+
+	  		  // Activa la máquina de estados MQTT y envía los datos
+	  		  mqtt_raspberry_set_enabled(1);
+	  		  mqtt_raspberry_send(t, h, l);
+
+	  		  // Espera a que termine el envío (opcional, puedes dejar que corra en background)
+	  		  while (mqtt_raspberry_is_busy()) {
+	  			  mqtt_raspberry_process();
+	  			  HAL_Delay(10);
+	  		  }
+	  		marblack++;
+	  	  }
+
+	  	  // Procesa la máquina de estados MQTT (importante si usas envío asíncrono)
+	  	  mqtt_raspberry_process();
+
+	  	  HAL_Delay(10); // Pequeño delay para no saturar el MCU
+
+
 
 	  // Reseteo de la conexión ESP8266-router cada 1 hora para asegurar que no se sature
 	  if (currentTick - lastWiFiReset > WIFI_RESET_INTERVAL) {	//Forzando reinicio WiFi por mantenimiento
@@ -553,10 +612,7 @@ static void MX_GPIO_Init(void)
 
 /* USER CODE BEGIN 4 */
 
-int __io_putchar(int ch) {
-    ITM_SendChar(ch);
-    return ch;
-}
+
 
 static void MX_NVIC_Init(void)
 {
@@ -580,8 +636,7 @@ void Error_Handler(void)
   }
   /* USER CODE END Error_Handler_Debug */
 }
-
-#ifdef  USE_FULL_ASSERT
+#ifdef USE_FULL_ASSERT
 /**
   * @brief  Reports the name of the source file and the source line number
   *         where the assert_param error has occurred.

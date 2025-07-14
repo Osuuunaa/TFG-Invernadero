@@ -68,6 +68,7 @@ void sendDataToThingSpeak(const char* apiKey, float averageTemperature, float hu
 void processThingSpeakStateMachine() {	// Maneja el proceso de comunicación con ThingSpeak a través de comandos AT y gestiona las respuestas del ESP8266 en una máquina de estados
     switch (state) {
         case 1: {
+        	printf("Dentro de la maquina de estados \r\n");
             char cmd[100];
             sprintf(cmd, "AT+CIPSTART=\"TCP\",\"api.thingspeak.com\",80\r\n");
             esp8266_send_command(cmd);

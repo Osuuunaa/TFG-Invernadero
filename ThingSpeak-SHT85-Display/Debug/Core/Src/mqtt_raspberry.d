@@ -29,6 +29,7 @@ Core/Src/mqtt_raspberry.o: ../Core/Src/mqtt_raspberry.c \
  ../Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_hal_pwr_ex.h \
  ../Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_hal_spi.h \
  ../Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_hal_uart.h \
+ ../Core/Inc/mqtt_raspberry.h ../Core/Inc/esp_8266.h \
  ../Core/Inc/esp_8266.h
 ../Core/Inc/mqtt_raspberry.h:
 ../Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_hal.h:
@@ -60,4 +61,6 @@ Core/Src/mqtt_raspberry.o: ../Core/Src/mqtt_raspberry.c \
 ../Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_hal_pwr_ex.h:
 ../Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_hal_spi.h:
 ../Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_hal_uart.h:
+../Core/Inc/mqtt_raspberry.h:
+../Core/Inc/esp_8266.h:
 ../Core/Inc/esp_8266.h:

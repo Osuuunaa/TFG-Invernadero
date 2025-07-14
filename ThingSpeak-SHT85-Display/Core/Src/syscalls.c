@@ -30,6 +30,29 @@
 #include <sys/time.h>
 #include <sys/times.h>
 
+// Debug Exception & Monitor Control Register Base Address
+#define DEMCR                        *((volatile uint32_t*) 0xE000EDFCU)
+
+//ITM Register Address
+#define ITM_STIMULUS_PORT0           *((volatile uint32_t*) 0xE0000000)
+#define ITM_TRACE_EN                 *((volatile uint32_t*) 0xE0000E00)
+
+void ITM_SendChar(uint8_t ch)
+{
+    // Enable TRCENA
+    DEMCR |= (1<<24);
+
+    // Enable Stimulus Port0
+    ITM_TRACE_EN |= (1<<0);
+
+    // Read FIFO Status in bit[0]
+    while(!(ITM_STIMULUS_PORT0 & 1));
+
+    // Write to ITM Stimulus Port0
+    ITM_STIMULUS_PORT0 = ch;
+}
+
+
 
 /* Variables */
 extern int __io_putchar(int ch) __attribute__((weak));

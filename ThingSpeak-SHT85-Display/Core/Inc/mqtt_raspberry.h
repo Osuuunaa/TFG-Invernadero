@@ -12,9 +12,30 @@
 
 extern char esp8266_rx_buffer[256];
 
-void mqtt_raspberry_set_enabled(uint8_t enable);
-void mqtt_raspberry_send(float t, float h, float l);
-void mqtt_raspberry_process(void); // Llamar de forma cíclica
+#include "mqtt_raspberry.h"
+#include "esp_8266.h"
+#include <string.h>
+#include <stdio.h>
+#include <stdint.h>
 
+extern UART_HandleTypeDef huart2;
+
+
+
+
+void mqtt_raspberry_set_enabled(uint8_t enable) ;
+
+void mqtt_raspberry_send(float t, float h, float l) ;
+
+//static void mqtt_send_connect_packet(void);
+//
+//static void mqtt_publish_unified_json(const char* topic);
+//
+//// Espera y lee 4 bytes del CONNACK MQTT (binario, no texto)
+//static uint8_t mqtt_wait_connack(void);
+
+void mqtt_raspberry_process(void);
+
+uint8_t mqtt_raspberry_is_busy(void);
 
 #endif /* INC_MQTT_RASPBERRY_H_ */
