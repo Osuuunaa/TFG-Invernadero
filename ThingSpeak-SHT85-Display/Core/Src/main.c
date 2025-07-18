@@ -55,7 +55,7 @@ const char* WIFI_PASS = "55253A2D16DDBF32D47B";
 #define SEND_THINGSPEAK_INTERVAL 20000 // 20 segundos. Linea 184 de system_stm32f4xx.c modificada manualmente
 #define SEND_MQTT_INTERVAL 8000 // 20 segundos. Linea 184 de system_stm32f4xx.c modificada manualmente
 
-#define WIFI_RESET_INTERVAL 3600000 // 1h en ms
+//#define WIFI_RESET_INTERVAL 3600000 // 1h en ms
 
 /* USER CODE END PD */
 
@@ -84,7 +84,7 @@ volatile uint32_t lastTimeMeasurement = 0;
 volatile uint32_t lastTimeDisplay = 0;
 volatile uint32_t lastThingSpeakSend = 0;
 volatile uint32_t lastMQTTSend = 0;
-volatile uint32_t lastWiFiReset = 0;
+//volatile uint32_t lastWiFiReset = 0;
 volatile uint8_t displayState = 0; // 0: Temperature, 1: Humidity, 2: Luminosity
 volatile bool releOn = false; // Variable global para monitorear el estado del relé
 
@@ -205,21 +205,38 @@ int main(void)
   HAL_Delay(500);
 
   VEML7700_Init();
-  connectToWiFi(WIFI_SSID, WIFI_PASS);
+
+//  if (!ESP_Init()) {
+//          printf("Error al inicializar ESP8266\r\n");
+//          Error_Handler();
+//      }
+//
+//      // 2) Conectar al Wi-Fi
+//      if (!ESP_ConnectWiFi(WIFI_SSID, WIFI_PASS)) {
+//          printf("Error al conectar al Wi-Fi\r\n");
+//          Error_Handler();
+//      }
+//
+//  if (ESP_ConnectWiFi(WIFI_SSID, WIFI_PASS)) {
+//	  marblack = 5;
+//	  LCD_Clear();
+//	  LCD_SetCursor(0, 0);
+//	  LCD_Print("Wifi conectado");
+//	  LCD_SetCursor(1, 0);
+//	  LCD_Print("correctamente");
+//
+//  } else {
+//	  marblack = 53;
+//	  LCD_Clear();
+//	  LCD_SetCursor(0, 0);
+//	  LCD_Print("Wifi ERROR");
+//	  LCD_SetCursor(1, 0);
+//	  LCD_Print("de conexion");
+//  }
 
 
-  if(isWiFiConnected() == 1){
-	LCD_Clear();
-	LCD_SetCursor(0, 0);
-	LCD_Print("Wifi conectado");
-	LCD_SetCursor(1, 0);
-	LCD_Print("correctamente");
-  }
-
-  printf("Inicio del programa...\n");
 
   Rele_Off(); // Relé inicializado en OFF
-
 
   /* USER CODE END 2 */
 
@@ -237,15 +254,6 @@ int main(void)
 //	  if (!isWiFiConnected()) {
 //		  connectToWiFi(WIFI_SSID, WIFI_PASS);
 //	  }
-
-
-
-
-
-
-
-
-
 
 
 
@@ -314,45 +322,38 @@ int main(void)
 	  }
 */
 	  // Envío de datos MQTT cada X segundos
-	  	  if (currentTick - lastMQTTSend >= SEND_MQTT_INTERVAL) {
-	  		  marblack = 10;
-	  		lastMQTTSend += SEND_MQTT_INTERVAL;
+	  // Cada X segundos, prepara datos y activa el envío
+	  if (currentTick - lastMQTTSend >= SEND_MQTT_INTERVAL) {
+		  lastMQTTSend = currentTick;
 
-	  		  // Si tienes medias, cámbialo por tus promedios aquí
-	  		  float t = temperature;
-	  		  float h = humidity;
-	  		  float l = luminosity;
+		  float t = temperature;
+		  float h = humidity;
+		  float l = luminosity;
 
-	  		  // Activa la máquina de estados MQTT y envía los datos
-	  		  mqtt_raspberry_set_enabled(1);
-	  		  mqtt_raspberry_send(t, h, l);
-
-	  		  // Espera a que termine el envío
-	  		  while (mqtt_raspberry_is_busy() == 1) {
-	  			  mqtt_raspberry_process();
-	  			  HAL_Delay(10);
-	  		  }
-	  		marblack++;
-	  	  }
-
-	  	  // Procesa la máquina de estados MQTT (importante si usas envío asíncrono)
-	  	  mqtt_raspberry_process();
-
-	  	  HAL_Delay(10); // Pequeño delay para no saturar el MCU
+		  mqtt_raspberry_send(t, h, l);
+		  mqtt_raspberry_set_enabled(1);  // Activa la máquina de estados
 
 
-
-	  // Reseteo de la conexión ESP8266-router cada 1 hora para asegurar que no se sature
-	  if (currentTick - lastWiFiReset > WIFI_RESET_INTERVAL) {	//Forzando reinicio WiFi por mantenimiento
-		  lastWiFiReset = HAL_GetTick();
-		  esp8266_reset_and_reconnect(WIFI_SSID,WIFI_PASS);
 	  }
 
-	  processThingSpeakStateMachine(); // Procesar la máquina de estados de ThingSpeak
+	  	// Siempre procesar la máquina de estados, paso a paso
+	  	mqtt_raspberry_process();
 
-	  // INICIO COMUNICACIÓN MQTT CON RASPBERRY
-	  //mqtt_raspberry_process();
-	  // FIN COMUNICACIÓN MQTT CON RASPBERRY
+	  	HAL_Delay(10); // Pequeño delay para no saturar el MCU
+
+
+
+		ESP_RESET();
+
+//	  	ESP_RESET();
+
+
+
+
+
+
+//	  processThingSpeakStateMachine(); // Procesar la máquina de estados de ThingSpeak
+
 
   }
   /* USER CODE END 3 */
@@ -535,10 +536,12 @@ static void MX_USART2_UART_Init(void)
   huart2.Init.OverSampling = UART_OVERSAMPLING_16;
   if (HAL_UART_Init(&huart2) != HAL_OK)
   {
+
     Error_Handler();
   }
   /* USER CODE BEGIN USART2_Init 2 */
 
+  HAL_UART_Receive_IT(&huart2, &usartBuff_Rx, 1);
 
   /* USER CODE END USART2_Init 2 */
 
@@ -566,6 +569,9 @@ static void MX_GPIO_Init(void)
                           |GPIO_PIN_4|GPIO_PIN_5, GPIO_PIN_RESET);
 
   /*Configure GPIO pin Output Level */
+  HAL_GPIO_WritePin(GPIOA, GPIO_PIN_1, GPIO_PIN_RESET);
+
+  /*Configure GPIO pin Output Level */
   HAL_GPIO_WritePin(GPIOA, GPIO_PIN_4, GPIO_PIN_SET);
 
   /*Configure GPIO pin Output Level */
@@ -582,6 +588,13 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
   HAL_GPIO_Init(GPIOC, &GPIO_InitStruct);
+
+  /*Configure GPIO pin : PA1 */
+  GPIO_InitStruct.Pin = GPIO_PIN_1;
+  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+  HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
 
   /*Configure GPIO pin : PA4 */
   GPIO_InitStruct.Pin = GPIO_PIN_4;

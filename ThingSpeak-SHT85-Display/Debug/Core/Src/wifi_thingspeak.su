@@ -1,4 +1,2 @@
-../Core/Src/wifi_thingspeak.c:23:6:connectToWiFi	120	static
-../Core/Src/wifi_thingspeak.c:49:9:isWiFiConnected	8	static
-../Core/Src/wifi_thingspeak.c:57:6:sendDataToThingSpeak	24	static
-../Core/Src/wifi_thingspeak.c:68:6:processThingSpeakStateMachine	360	static
+../Core/Src/wifi_thingspeak.c:27:6:sendDataToThingSpeak	24	static
+../Core/Src/wifi_thingspeak.c:38:6:processThingSpeakStateMachine	4	static

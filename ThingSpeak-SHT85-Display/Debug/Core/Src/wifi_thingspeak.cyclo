@@ -1,4 +1,2 @@
-../Core/Src/wifi_thingspeak.c:23:6:connectToWiFi	1
-../Core/Src/wifi_thingspeak.c:49:9:isWiFiConnected	1
-../Core/Src/wifi_thingspeak.c:57:6:sendDataToThingSpeak	1
-../Core/Src/wifi_thingspeak.c:68:6:processThingSpeakStateMachine	10
+../Core/Src/wifi_thingspeak.c:27:6:sendDataToThingSpeak	1
+../Core/Src/wifi_thingspeak.c:38:6:processThingSpeakStateMachine	1

@@ -10,18 +10,18 @@
 
 #include "stm32f4xx_hal.h"
 
-extern char esp8266_rx_buffer[256];
 
 #include "mqtt_raspberry.h"
 #include "esp_8266.h"
 #include <string.h>
 #include <stdio.h>
 #include <stdint.h>
+#include <stdbool.h>
 
 extern UART_HandleTypeDef huart2;
 
 
-
+static bool mqtt_wait_connack(void);
 
 void mqtt_raspberry_set_enabled(uint8_t enable) ;
 
