@@ -1,0 +1,2 @@
+../Core/Src/wifi_thingspeak.c:33:6:sendDataToThingSpeak	1
+../Core/Src/wifi_thingspeak.c:44:6:processThingSpeakStateMachine	8
