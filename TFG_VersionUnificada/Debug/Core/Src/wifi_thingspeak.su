@@ -1,0 +1,2 @@
+../Core/Src/wifi_thingspeak.c:18:6:sendDataToThingSpeak	24	static
+../Core/Src/wifi_thingspeak.c:26:6:processThingSpeakStateMachine	312	static

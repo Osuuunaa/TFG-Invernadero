@@ -1,0 +1,2 @@
+../Core/Src/ESP_DATA_HANDLER.c:31:6:ESP_Init	104	static
+../Core/Src/ESP_DATA_HANDLER.c:78:5:Server_Send	104	static
