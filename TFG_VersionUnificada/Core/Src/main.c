@@ -145,7 +145,7 @@ int main(void)
   HAL_UART_Receive(&huart6, (uint8_t *) textrc, 15, 100);
 
 
-  ESP_Init("MOVISTAR_1DD2", "55253A2D16DDBF32D47B", "192.168.1.82");
+  ESP_Init("MOVISTAR_1DD2", "55253A2D16DDBF32D47B", "192.168.1.222");
 
   // ----------------- SENSORS -----------------
   SHT85_Init();
@@ -173,31 +173,7 @@ int main(void)
 	  }
 
 
-	  // ----------------- THINGSPEAK -----------------
-//	  if (currentTick - lastThingSpeakSend >= SEND_THINGSPEAK_INTERVAL) {
-//		  lastThingSpeakSend += SEND_THINGSPEAK_INTERVAL ; // es recomendable utilizar el método de acumulación para evitar deriva en el tiempo
-//		  if(countAverage == 0) {
-//			  averageTemperature = temperature;
-//			  averageHumidity = humidity;
-//			  averageLuminosity = luminosity;
-//		  } else {
-//			  averageTemperature = averageTemperature/countAverage;
-//			  averageHumidity = averageHumidity/countAverage;
-//			  averageLuminosity = averageLuminosity/countAverage;
-//		  }
-//
-//		  sendDataToThingSpeak(THINGSPEAK_API_KEY, temperature, humidity, luminosity);
-//		  sendDataToRpi(temperature, humidity, luminosity);
-//
-//		  averageTemperature = 0.0f;
-//		  averageHumidity = 0.0f;
-//		  averageLuminosity = 0.0f;
-//		  countAverage = 0;
-//	  }
-//	  processThingSpeakStateMachine(); // Procesar la máquina de estados de ThingSpeak
-//	  processRpiStateMachine(); // Procesar la máquina de estados de Raspberry
-
-
+	  // ----------------- THINGSPEAK + MQTT RASPBERRY -----------------
 	  if (activeTask == TASK_IDLE && currentTick - lastThingSpeakSend >= SEND_THINGSPEAK_INTERVAL) {
 	      lastThingSpeakSend += SEND_THINGSPEAK_INTERVAL;
 
