@@ -187,14 +187,18 @@ int main(void)
 			  averageHumidity = averageHumidity/countAverage;
 			  averageLuminosity = averageLuminosity/countAverage;
 		  }
-	      sendDataToThingSpeak(THINGSPEAK_API_KEY, temperature, humidity, luminosity);
+//	      sendDataToThingSpeak(THINGSPEAK_API_KEY, temperature, humidity, luminosity);
+	      sendDataToRpi(temperature, humidity, luminosity);
 		  averageTemperature = 0.0f;
 		  averageHumidity = 0.0f;
 		  averageLuminosity = 0.0f;
 		  countAverage = 0;
-	      activeTask = TASK_THINGSPEAK;
+		  activeTask = TASK_RPI;
+//	      activeTask = TASK_THINGSPEAK;
 	  }
-
+	  /*
+	   *
+	   *
 	  // Ejecutar la máquina que esté activa
 	  if (activeTask == TASK_THINGSPEAK) {
 	      processThingSpeakStateMachine();
@@ -206,9 +210,20 @@ int main(void)
 	      processRpiStateMachine();
 	      if (rpiState == 0) {
 	          activeTask = TASK_IDLE;  // listo para el siguiente ciclo
+
 	      }
 	  }
+*/
 
+	  // borrar abajo
+	  if (activeTask == TASK_RPI) {
+	  	      processRpiStateMachine();
+	  	      if (rpiState == 0) {
+	  	          activeTask = TASK_IDLE;  // listo para el siguiente ciclo
+
+	  	    	  activeTask = TASK_IDLE;
+	  	      }
+	  	  }
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */

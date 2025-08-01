@@ -16,80 +16,67 @@
 uint8_t rpiState = 0;  // Define la variable
 volatile uint8_t err = 0;
 
-static float wifiTemperature = 0, wifiHumidity = 0, wifiLuminosity = 0;
+static float wifiTemperatureRpi = 0, wifiHumidityRpi = 0, wifiLuminosityRpi = 0;
 
 
 void sendDataToRpi(float t, float h, float l) {
-	wifiTemperature = t;
-	wifiHumidity = h;
-	wifiLuminosity = l;
+	wifiTemperatureRpi = t;
+	wifiHumidityRpi = h;
+	wifiLuminosityRpi = l;
     rpiState = 1;	// Iniciar la máquina de estados
 }
 
 void mqtt_send_connect_packet(void)
 {
-    const char* clientId = MQTT_CLIENT_ID;
-    uint8_t  packet[256];
-    uint16_t idx = 0;
+    uint8_t packet[] = {
+        0x10, 0x2c,                         // Fixed header: CONNECT + Remaining Length = 47
+        0x00, 0x04, 'M', 'Q', 'T', 'T',     // Protocol Name
+        0x05,                               // Protocol Level = 5
+        0xC2,                               // Connect Flags: username + password + clean start
+        0x00, 0x3C,                         // Keep alive = 60s
 
-    // Fixed header
-    packet[idx++] = 0x10;         // MQTT CONNECT
-    uint16_t remLenPos = idx++;   // hueco para Remaining Length
+        0x05,                               // Properties length
+        0x11, 0x00, 0x00, 0x01, 0x2C,       // Session Expiry Interval = 300
 
-    // Variable header
-    packet[idx++] = 0x00; packet[idx++] = 0x04;
-    packet[idx++] = 'M'; packet[idx++] = 'Q';
-    packet[idx++] = 'T'; packet[idx++] = 'T';
-    packet[idx++] = 0x05;         // Protocol Level 5.0
+        0x00, 0x0E,                         // Client ID length = 14
+        'm','q','t','t','x','_','0','c','6','6','8','d','0','d',
 
-    packet[idx++] = 0x02;         // Connect Flags: Clean Start
-    packet[idx++] = 0x00; packet[idx++] = 0x3C; // Keep-alive = 60s
+        0x00, 0x05,                         // Username length = 5
+        'o','s','u','n','a',
 
-    // MQTT 5: propiedades vacías
-    packet[idx++] = 0x00;
+        0x00, 0x03,                         // Password length = 6
+        't','f','g'
+    };
 
-    // Payload: Client ID
-    uint16_t len = strlen(clientId);
-    packet[idx++] = (uint8_t)(len >> 8);
-    packet[idx++] = (uint8_t)(len & 0xFF);
-    memcpy(&packet[idx], clientId, len);
-    idx += len;
-
-    // Rellenar Remaining Length
-    packet[remLenPos] = idx - 2;
-
-    // 1) Preparar CIPSEND
+    // 1) AT+CIPSEND con longitud total
     char cmd[32];
-    sprintf(cmd, "AT+CIPSEND=%u\r\n", idx);
+    sprintf(cmd, "AT+CIPSEND=%u\r\n", sizeof(packet));
 
     Uart_flush();
     Uart_sendstring(cmd);
 
-    // 2) Esperar prompt ">"
-    if (!Wait_for(">")) {
-        printf("❌ Error esperando '>' en CIPSEND\r\n");
-        return;
-    }
+    if (!Wait_for(">")) return;
 
-    // 3) Enviar el paquete MQTT
-    for (uint16_t i = 0; i < idx; i++) {
+    // 2) Enviar byte a byte
+    for (uint16_t i = 0; i < sizeof(packet); i++) {
         Uart_write(packet[i]);
     }
 
-    // 4) (Opcional) esperar "SEND OK"
     Wait_for("SEND OK\r\n");
 }
 
-
+/*
 bool mqtt_wait_connack(void)
 {
-    const uint32_t timeout = 1000;  // 1s
+    const uint32_t timeout = 3000;  // 1s
     uint32_t start = HAL_GetTick();
 
-
-
-    uint8_t expected[4] = {0x20, 0x02, 0x00, 0x00};
-    uint8_t received[4];
+    // CONNACK recibida (20 13 00 00 10 27 00 10 00 00 25 01 2a 01 29 01 22 ff ff 28 01)
+    const uint8_t expected[] = {
+        0x20, 0x13, 0x00, 0x00, 0x10, 0x27, 0x00, 0x10, 0x00, 0x00,
+        0x25, 0x01, 0x2A, 0x01, 0x29, 0x01, 0x22, 0xFF, 0xFF, 0x28, 0x01
+    };
+    const int expected_len = sizeof(expected);
     int idx = 0;
 
     while ((HAL_GetTick() - start) < timeout)
@@ -99,24 +86,48 @@ bool mqtt_wait_connack(void)
             int c = Uart_read();
             if (c < 0) continue;
 
-            received[idx++] = (uint8_t)c;
+            if ((uint8_t)c != expected[idx])
+                return false;
 
-            // Si recibimos 4 bytes, comparamos
-            if (idx == 4)
-            {
-                if (memcmp(received, expected, 4) == 0)
-                {
-                    return true;
-                }
-                else
-                {
-                    break;  // llegó algo pero no es CONNACK válido
-                }
-            }
+            idx++;
+
+            if (idx == expected_len)
+                return true;
         }
     }
+
     return false;
 }
+*/
+
+bool mqtt_wait_connack(void)
+{
+    const uint8_t expected[] = { 0x20, 0x13, 0x00, 0x00 }; // CONNACK mínimo
+    uint8_t received[4];
+    int idx = 0;
+    uint32_t start = HAL_GetTick();
+    const uint32_t timeout = 3000;  // Más tiempo
+
+    while ((HAL_GetTick() - start) < timeout)
+    {
+        if (IsDataAvailable())
+        {
+        	uint8_t c = (uint8_t)Uart_read();
+
+			// Solo empezar a almacenar si detectamos el primer byte correcto
+			if (idx == 0 && c != expected[0])
+				continue;
+
+			received[idx++] = c;
+
+			if (idx == 4)
+				return (received[0] == 0x20 && received[2] == 0x00 && received[3] == 0x00);
+        }
+    }
+
+    return false;
+}
+
 
 void mqtt_publish_unified_json(const char* topic)
 {
@@ -124,7 +135,7 @@ void mqtt_publish_unified_json(const char* topic)
     char payload[128];
     int payloadLen = snprintf(payload, sizeof(payload),
                               "{\"temp\":%.2f,\"hum\":%.2f,\"lux\":%.2f}",
-							  wifiTemperature, wifiHumidity, wifiLuminosity);
+							  wifiTemperatureRpi, wifiHumidityRpi, wifiLuminosityRpi);
     if (payloadLen < 0 || payloadLen >= sizeof(payload)) return;
 
     // 2) Longitudes
@@ -219,7 +230,7 @@ void processRpiStateMachine(void) {
         if (mqtt_wait_connack()) {
             rpiState = 4;
             break;
-        } else if (HAL_GetTick() - stateTimeout > 2000) {
+        } else if (HAL_GetTick() - stateTimeout > 5000) {
         	closeConnection();
 			rpiState = 0;
 			break;

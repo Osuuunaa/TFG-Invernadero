@@ -221,6 +221,9 @@ void Uart_flush (void)
 	memset(_rx_buffer->buffer,'\0', UART_BUFFER_SIZE);
 	_rx_buffer->head = 0;
 
+	memset(_tx_buffer->buffer,'\0', UART_BUFFER_SIZE);
+	_tx_buffer->head = 0;
+
     // Limpiar buffer de recepción
 //    memset(_rx_buffer->buffer, '\0', UART_BUFFER_SIZE);
 //    _rx_buffer->head = 0;
