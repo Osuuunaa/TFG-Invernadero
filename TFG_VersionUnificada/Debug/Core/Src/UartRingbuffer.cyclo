@@ -8,9 +8,10 @@
 ../Core/Src/UartRingbuffer.c:142:6:Uart_printbase	5
 ../Core/Src/UartRingbuffer.c:162:6:GetDataFromBuffer	10
 ../Core/Src/UartRingbuffer.c:219:6:Uart_flush	1
-../Core/Src/UartRingbuffer.c:238:5:Uart_peek	2
-../Core/Src/UartRingbuffer.c:251:5:Copy_upto	9
-../Core/Src/UartRingbuffer.c:285:5:Get_after	4
-../Core/Src/UartRingbuffer.c:298:5:Wait_for	8
-../Core/Src/UartRingbuffer.c:327:6:Uart_isr	6
-../Core/Src/UartRingbuffer.c:389:6:closeConnection	1
+../Core/Src/UartRingbuffer.c:227:6:Uart_clear	1
+../Core/Src/UartRingbuffer.c:237:5:Uart_peek	2
+../Core/Src/UartRingbuffer.c:250:5:Copy_upto	9
+../Core/Src/UartRingbuffer.c:284:5:Get_after	4
+../Core/Src/UartRingbuffer.c:297:5:Wait_for	8
+../Core/Src/UartRingbuffer.c:326:6:Uart_isr	6
+../Core/Src/UartRingbuffer.c:388:6:closeConnection	1

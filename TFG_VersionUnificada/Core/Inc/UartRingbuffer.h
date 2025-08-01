@@ -61,6 +61,8 @@ void GetDataFromBuffer (char *startString, char *endString, char *buffertocopyfr
 /* Resets the entire ring buffer, the new data will start from position 0 */
 void Uart_flush (void);
 
+void Uart_clear (void);
+
 /* Peek for the data in the Rx Bffer without incrementing the tail count 
 * Returns the character
 * USAGE: if (Uart_peek () == 'M') do something 

@@ -20,6 +20,7 @@ static float wifiTemperatureRpi = 0, wifiHumidityRpi = 0, wifiLuminosityRpi = 0;
 
 
 void sendDataToRpi(float t, float h, float l) {
+	Uart_clear ();
 	wifiTemperatureRpi = t;
 	wifiHumidityRpi = h;
 	wifiLuminosityRpi = l;

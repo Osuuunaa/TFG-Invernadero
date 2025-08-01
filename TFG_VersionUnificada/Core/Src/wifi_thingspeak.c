@@ -65,18 +65,21 @@ void processThingSpeakStateMachine() {	// Maneja el proceso de comunicación con
 //			thingSpeakState = 4;
 			break;
         }
-        case 4: {  // Cerrar la conexión TCP con AT+CIPCLOSE
-            Uart_flush();
-            Uart_sendstring("AT+CIPCLOSE\r\n");
-            Wait_for("OK\r\n");
 
-            thingSpeakState = 0;  // Reiniciar máquina de estados
-            break;
-        }
-        default: {
-        	thingSpeakState = 0; // Finalizar la máquina de estados
+        case 4: {  // Cerrar conexión
+			closeConnection();
+			thingSpeakState = 0;
 			break;
-        }
+
+		}
+		default:{
+			closeConnection();
+			thingSpeakState = 0;
+			break;
+
+		}
+
+
 
 	}
 }

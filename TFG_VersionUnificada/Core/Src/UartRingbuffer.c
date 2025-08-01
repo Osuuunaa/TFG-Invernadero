@@ -221,19 +221,18 @@ void Uart_flush (void)
 	memset(_rx_buffer->buffer,'\0', UART_BUFFER_SIZE);
 	_rx_buffer->head = 0;
 
+
+}
+
+void Uart_clear (void)
+{
 	memset(_tx_buffer->buffer,'\0', UART_BUFFER_SIZE);
 	_tx_buffer->head = 0;
 
-    // Limpiar buffer de recepción
-//    memset(_rx_buffer->buffer, '\0', UART_BUFFER_SIZE);
-//    _rx_buffer->head = 0;
-////    _rx_buffer->tail = 1;
-//
-//    // Limpiar buffer de transmisión
-//    memset(_tx_buffer->buffer, '\0', UART_BUFFER_SIZE);
-//    _tx_buffer->head = 0;
-//    _tx_buffer->tail = 1;
+
 }
+
+
 
 int Uart_peek()
 {
