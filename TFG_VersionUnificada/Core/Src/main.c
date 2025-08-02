@@ -41,7 +41,8 @@
 /* USER CODE BEGIN PD */
 #define MEASUREMENT_INTERVAL 1000 // 0.2 segundos. Frecuencia para tomar mediciones con los sensores
 #define THINGSPEAK_API_KEY "6K0OKMK195CFJ8SQ"
-#define SEND_THINGSPEAK_INTERVAL 20000 // 20 segundos. Linea 184 de system_stm32f4xx.c modificada manualmente
+#define SEND_THINGSPEAK_INTERVAL 30000 // 30 segundos. Linea 184 de system_stm32f4xx.c modificada manualmente
+#define ANTIBLOCK_STATE_MACHINE 5000 // 5 segundos puede estar como maximo en una maquina de estados. Sino -> reseteo del esp8266
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -78,6 +79,8 @@ typedef enum {
 
 static CommTask activeTask = TASK_IDLE;
 
+volatile bool alertaBloqueo = false;
+
 
 /* USER CODE END PV */
 
@@ -106,6 +109,8 @@ int main(void)
   /* USER CODE BEGIN 1 */
 	lastTimeMeasurement = HAL_GetTick();
 	lastThingSpeakSend = HAL_GetTick();
+	volatile uint32_t tsStart = 0;
+	volatile uint32_t rpiStart = 0;
   /* USER CODE END 1 */
 
   /* MCU Configuration--------------------------------------------------------*/
@@ -157,7 +162,7 @@ int main(void)
   /* USER CODE BEGIN WHILE */
   while (1)
   {
-	  uint32_t currentTick = HAL_GetTick();
+	  volatile uint32_t currentTick = HAL_GetTick();
 
 	  // ----------------- SENSORS -----------------
 	  if (currentTick - lastTimeMeasurement >= MEASUREMENT_INTERVAL) {
@@ -196,22 +201,59 @@ int main(void)
 	      activeTask = TASK_THINGSPEAK;
 	  }
 
-	  // Ejecutar la máquina que esté activa
+	  // Ejecutar la máquina que esté activa. Evita bloques en las máquinas de estado
 	  if (activeTask == TASK_THINGSPEAK) {
+	      if (thingSpeakState != 0 && tsStart == 0)
+	    	  tsStart = HAL_GetTick();
+
 	      processThingSpeakStateMachine();
+
 	      if (thingSpeakState == 0) {
-	    	  HAL_Delay(800);		// Cambiar a Hal_tick para no bloquar, pero funciona
-
-	    	  sendDataToRpi(temperature, humidity, luminosity);  // solo cuando termina ThingSpeak
-	          activeTask = TASK_RPI;
+	          tsStart = 0;  // reiniciar si finaliza bien
+	          if (currentTick - lastThingSpeakSend >= SEND_THINGSPEAK_INTERVAL) {
+	              lastThingSpeakSend += SEND_THINGSPEAK_INTERVAL;
+	              sendDataToRpi(temperature, humidity, luminosity);
+	              activeTask = TASK_RPI;
+	          }
+	      } else if ((HAL_GetTick() - tsStart) > ANTIBLOCK_STATE_MACHINE) {
+	          alertaBloqueo = true;
 	      }
-	  } else if (activeTask == TASK_RPI) {
-	      processRpiStateMachine();
-	      if (rpiState == 0) {
-	          activeTask = TASK_IDLE;  // listo para el siguiente ciclo
 
+	  } else if (activeTask == TASK_RPI) {
+	      if (rpiState != 0 && rpiStart == 0)
+	          rpiStart = HAL_GetTick();
+
+	      processRpiStateMachine();
+
+	      if (rpiState == 0) {
+	          rpiStart = 0;
+	          activeTask = TASK_IDLE;
+	      } else if ((HAL_GetTick() - rpiStart) > ANTIBLOCK_STATE_MACHINE) {
+	          alertaBloqueo = true;
 	      }
 	  }
+
+
+	  if (alertaBloqueo) {
+	      // 1. Resetear variables de estado
+	      thingSpeakState = 0;
+	      rpiState = 0;
+	      activeTask = TASK_IDLE;
+
+	      // 2. Limpiar buffers UART
+	      Uart_flush();
+	      Uart_clear();
+
+	      ESP_Init("MOVISTAR_1DD2", "55253A2D16DDBF32D47B", "192.168.1.222");
+
+	      // 5. Reset de flags y temporizadores
+	      alertaBloqueo = false;
+	      tsStart = 0;
+	      rpiStart = 0;
+	  }
+
+
+
 
 
     /* USER CODE END WHILE */

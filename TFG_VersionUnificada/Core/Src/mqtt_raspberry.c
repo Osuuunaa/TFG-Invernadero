@@ -24,7 +24,7 @@ void sendDataToRpi(float t, float h, float l) {
 	wifiTemperatureRpi = t;
 	wifiHumidityRpi = h;
 	wifiLuminosityRpi = l;
-    rpiState = 1;	// Iniciar la máquina de estados
+    rpiState = 2;	// Iniciar la máquina de estados
 }
 
 void mqtt_send_connect_packet(void)
@@ -202,7 +202,12 @@ void processRpiStateMachine(void) {
     static uint32_t stateTimeout = 0;
 
     switch (rpiState) {
-    case 1: {  // Iniciar conexión TCP
+    case 1: {  // Cerrar conexión
+		closeConnection();
+		rpiState = 2;
+		break;
+	}
+    case 2: {  // Iniciar conexión TCP
         Uart_flush();
         char cmd[100];
         sprintf(cmd, "AT+CIPSTART=\"TCP\",\"%s\",%d\r\n", MQTT_BROKER_IP, MQTT_BROKER_PORT);
@@ -214,22 +219,22 @@ void processRpiStateMachine(void) {
             break;
         }
 
-        rpiState = 2;
+        rpiState = 3;
         break;
     }
 
-    case 2: {  // enviar paquete CONNECT (MQTT 5.0)
+    case 3: {  // enviar paquete CONNECT (MQTT 5.0)
         Uart_flush();
         mqtt_send_connect_packet();
 
-        rpiState = 3;
+        rpiState = 4;
         stateTimeout = HAL_GetTick();
         break;
     }
 
-    case 3: {  // Esperar CONNACK
+    case 4: {  // Esperar CONNACK
         if (mqtt_wait_connack()) {
-            rpiState = 4;
+            rpiState = 5;
             break;
         } else if (HAL_GetTick() - stateTimeout > 5000) {
         	closeConnection();
@@ -239,16 +244,16 @@ void processRpiStateMachine(void) {
         break;
     }
 
-    case 4: {  // MQTT PUBLISH JSON
+    case 5: {  // MQTT PUBLISH JSON
         Uart_flush();
         mqtt_publish_unified_json(MQTT_TOPIC_JSON);
 
-        rpiState = 5;
+        rpiState = 6;
         stateTimeout = HAL_GetTick();
         break;
     }
 
-    case 5: {  // Cerrar conexión
+    case 6: {  // Cerrar conexión
         closeConnection();
         rpiState = 0;
         break;

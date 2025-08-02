@@ -388,6 +388,7 @@ void Uart_isr (UART_HandleTypeDef *huart)
 void closeConnection(void){
  	Uart_flush();		// Error. Cerrar puerto para no bloquar Thingspeak o MQTT
 	Uart_sendstring("AT+CIPCLOSE\r\n");
+	HAL_Delay(500);  // Espera 500 ms para asegurar cierre completo
 }
 
 /*** Depreciated For now. This is not needed, try using other functions to meet the requirement ***/
