@@ -41,8 +41,9 @@
 /* USER CODE BEGIN PD */
 #define MEASUREMENT_INTERVAL 1000 // 0.2 segundos. Frecuencia para tomar mediciones con los sensores
 #define THINGSPEAK_API_KEY "6K0OKMK195CFJ8SQ"
-#define SEND_THINGSPEAK_INTERVAL 30000 // 30 segundos. Linea 184 de system_stm32f4xx.c modificada manualmente
-#define ANTIBLOCK_STATE_MACHINE 5000 // 5 segundos puede estar como maximo en una maquina de estados. Sino -> reseteo del esp8266
+#define SEND_THINGSPEAK_INTERVAL 60000 // 30 segundos. Linea 184 de system_stm32f4xx.c modificada manualmente
+#define SEND_RASPBERRY_INTERVAL 60000
+#define ANTIBLOCK_STATE_MACHINE 10000 // 10 segundos puede estar como maximo en una maquina de estados. Sino -> reseteo del esp8266
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -69,6 +70,7 @@ uint8_t countAverage = 0;
 // ----------------- TIME MEASUREMENT -----------------
 volatile uint32_t lastTimeMeasurement = 0;
 volatile uint32_t lastThingSpeakSend = 0;
+volatile uint32_t lastRpiSend = 0;
 
 // ----------------- STATE MACHINE -----------------
 typedef enum {
@@ -81,6 +83,14 @@ static CommTask activeTask = TASK_IDLE;
 
 volatile bool alertaBloqueo = false;
 
+// BORRAR SI NO FUNCIONA
+volatile uint32_t nextThingSpeakSend = 0;  // o HAL_GetTick() + intervalo si no arranca en 0
+volatile uint32_t nextRpiSend = 0;
+
+volatile uint32_t currentTick = 0;
+
+volatile uint32_t tsStart = 0;
+volatile uint32_t rpiStart = 0;
 
 /* USER CODE END PV */
 
@@ -109,8 +119,11 @@ int main(void)
   /* USER CODE BEGIN 1 */
 	lastTimeMeasurement = HAL_GetTick();
 	lastThingSpeakSend = HAL_GetTick();
-	volatile uint32_t tsStart = 0;
-	volatile uint32_t rpiStart = 0;
+	lastRpiSend = HAL_GetTick();
+	tsStart = 0;
+	rpiStart = 0;
+	nextThingSpeakSend = 30000;
+	nextRpiSend = 60000;
   /* USER CODE END 1 */
 
   /* MCU Configuration--------------------------------------------------------*/
@@ -137,19 +150,6 @@ int main(void)
   /* USER CODE BEGIN 2 */
 
   // ----------------- ESP8266 WIFI -----------------
-  char text[4] = "AT\r\n";
-  char textrc[15] = "";
-
-  HAL_UART_Transmit(&huart6, (uint8_t *) text, 4, HAL_MAX_DELAY);
-  HAL_UART_Receive(&huart6, (uint8_t *) textrc, 15, 100);
-
-  HAL_UART_Transmit(&huart6, (uint8_t *) text, 4, HAL_MAX_DELAY);
-  HAL_UART_Receive(&huart6, (uint8_t *) textrc, 15, 100);
-
-  HAL_UART_Transmit(&huart6, (uint8_t *) text, 4, HAL_MAX_DELAY);
-  HAL_UART_Receive(&huart6, (uint8_t *) textrc, 15, 100);
-
-
   ESP_Init("MOVISTAR_1DD2", "55253A2D16DDBF32D47B", "192.168.1.222");
 
   // ----------------- SENSORS -----------------
@@ -162,11 +162,13 @@ int main(void)
   /* USER CODE BEGIN WHILE */
   while (1)
   {
-	  volatile uint32_t currentTick = HAL_GetTick();
+	  currentTick = HAL_GetTick();
 
 	  // ----------------- SENSORS -----------------
 	  if (currentTick - lastTimeMeasurement >= MEASUREMENT_INTERVAL) {
-		  lastTimeMeasurement += MEASUREMENT_INTERVAL; // Incrementar en lugar de reiniciar
+//		  lastTimeMeasurement += MEASUREMENT_INTERVAL; // Incrementar en lugar de reiniciar
+		  lastTimeMeasurement = currentTick;
+
 		  SHT85_ReadSingleShot(&temperature, &humidity);
 		  SHT85_ErrorReset(&temperature, &humidity);
 		  averageTemperature += temperature;
@@ -179,8 +181,12 @@ int main(void)
 
 
 	  // ----------------- THINGSPEAK + MQTT RASPBERRY -----------------
-	  if (activeTask == TASK_IDLE && currentTick - lastThingSpeakSend >= SEND_THINGSPEAK_INTERVAL) {
-	      lastThingSpeakSend += SEND_THINGSPEAK_INTERVAL;
+//	  if (activeTask == TASK_IDLE && currentTick - lastThingSpeakSend >= SEND_THINGSPEAK_INTERVAL) {
+//	      lastThingSpeakSend += SEND_THINGSPEAK_INTERVAL;
+
+	  if (activeTask == TASK_IDLE && currentTick >= nextThingSpeakSend) {
+	      nextThingSpeakSend += SEND_THINGSPEAK_INTERVAL;
+	      lastThingSpeakSend = currentTick;	// Actualiza el tiempo del ultimo envio (opcional)
 
 	      // Calcular promedios
 	      if(countAverage == 0) {
@@ -203,24 +209,26 @@ int main(void)
 
 	  // Ejecutar la máquina que esté activa. Evita bloques en las máquinas de estado
 	  if (activeTask == TASK_THINGSPEAK) {
-	      if (thingSpeakState != 0 && tsStart == 0)
+	      if (thingSpeakState != 0 && tsStart == 0)		// Empieza maquina estados
 	    	  tsStart = HAL_GetTick();
 
 	      processThingSpeakStateMachine();
 
 	      if (thingSpeakState == 0) {
 	          tsStart = 0;  // reiniciar si finaliza bien
-	          if (currentTick - lastThingSpeakSend >= SEND_THINGSPEAK_INTERVAL) {
-	              lastThingSpeakSend += SEND_THINGSPEAK_INTERVAL;
-	              sendDataToRpi(temperature, humidity, luminosity);
-	              activeTask = TASK_RPI;
+	          if(currentTick >= nextRpiSend){
+				  nextRpiSend += SEND_RASPBERRY_INTERVAL;
+				  lastRpiSend = nextRpiSend - SEND_RASPBERRY_INTERVAL;	// Actualiza el tiempo del ultimo envio (opcional)
+				  sendDataToRpi(temperature, humidity, luminosity);
+				  activeTask = TASK_RPI;
 	          }
+
 	      } else if ((HAL_GetTick() - tsStart) > ANTIBLOCK_STATE_MACHINE) {
 	          alertaBloqueo = true;
 	      }
 
 	  } else if (activeTask == TASK_RPI) {
-	      if (rpiState != 0 && rpiStart == 0)
+	      if (rpiState != 0 && rpiStart == 0)		// Empieza maquina estados
 	          rpiStart = HAL_GetTick();
 
 	      processRpiStateMachine();
