@@ -30,6 +30,7 @@
 #include "veml7700.h"
 #include "wifi_thingspeak.h"
 #include "mqtt_raspberry.h"
+#include "lcd.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -41,9 +42,12 @@
 /* USER CODE BEGIN PD */
 #define MEASUREMENT_INTERVAL 1000 // 0.2 segundos. Frecuencia para tomar mediciones con los sensores
 #define THINGSPEAK_API_KEY "6K0OKMK195CFJ8SQ"
-#define SEND_THINGSPEAK_INTERVAL 60000 // 30 segundos. Linea 184 de system_stm32f4xx.c modificada manualmente
+#define SEND_THINGSPEAK_INTERVAL 60000 // 60 segundos. Linea 184 de system_stm32f4xx.c modificada manualmente
 #define SEND_RASPBERRY_INTERVAL 60000
 #define ANTIBLOCK_STATE_MACHINE 10000 // 10 segundos puede estar como maximo en una maquina de estados. Sino -> reseteo del esp8266
+//#define RESET_ESP_INTERVAL 3600000 // 3600 segundos = 1 hora. Reset del modulo esp8266 cada hora
+#define RESET_ESP_INTERVAL 300000 // 5 MINUTOS segundos = 1 hora. Reset del modulo esp8266 cada hora
+
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -82,6 +86,7 @@ typedef enum {
 static CommTask activeTask = TASK_IDLE;
 
 volatile bool alertaBloqueo = false;
+bool firstReset = false;
 
 // BORRAR SI NO FUNCIONA
 volatile uint32_t nextThingSpeakSend = 0;  // o HAL_GetTick() + intervalo si no arranca en 0
@@ -91,6 +96,7 @@ volatile uint32_t currentTick = 0;
 
 volatile uint32_t tsStart = 0;
 volatile uint32_t rpiStart = 0;
+volatile uint32_t lastResetEsp8266 = 0;
 
 /* USER CODE END PV */
 
@@ -122,6 +128,7 @@ int main(void)
 	lastRpiSend = HAL_GetTick();
 	tsStart = 0;
 	rpiStart = 0;
+	lastResetEsp8266 = 0;
 	nextThingSpeakSend = 30000;
 	nextRpiSend = 60000;
   /* USER CODE END 1 */
@@ -156,6 +163,17 @@ int main(void)
   SHT85_Init();
   HAL_Delay(500);
   VEML7700_Init();
+
+  // ----------------- PANTALLA LCD -----------------
+  LCD_Init();
+
+
+  LCD_Clear();
+  LCD_SetCursor(0, 0);
+  LCD_Print("Wifi conectado");
+  LCD_SetCursor(1, 0);
+  LCD_Print("correctamente");
+
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -166,7 +184,6 @@ int main(void)
 
 	  // ----------------- SENSORS -----------------
 	  if (currentTick - lastTimeMeasurement >= MEASUREMENT_INTERVAL) {
-//		  lastTimeMeasurement += MEASUREMENT_INTERVAL; // Incrementar en lugar de reiniciar
 		  lastTimeMeasurement = currentTick;
 
 		  SHT85_ReadSingleShot(&temperature, &humidity);
@@ -177,40 +194,41 @@ int main(void)
 		  ReadVEML7700(&luminosity);
 		  averageLuminosity += luminosity;
 		  countAverage++;
+
+		  // ----------------- PANTALLA LCD -----------------
+		  LCD_Update_Variables(&temperature, &humidity, &luminosity);
 	  }
 
 
 	  // ----------------- THINGSPEAK + MQTT RASPBERRY -----------------
-//	  if (activeTask == TASK_IDLE && currentTick - lastThingSpeakSend >= SEND_THINGSPEAK_INTERVAL) {
-//	      lastThingSpeakSend += SEND_THINGSPEAK_INTERVAL;
-
 	  if (activeTask == TASK_IDLE && currentTick >= nextThingSpeakSend) {
 	      nextThingSpeakSend += SEND_THINGSPEAK_INTERVAL;
 	      lastThingSpeakSend = currentTick;	// Actualiza el tiempo del ultimo envio (opcional)
 
 	      // Calcular promedios
-	      if(countAverage == 0) {
-			  averageTemperature = temperature;
-			  averageHumidity = humidity;
-			  averageLuminosity = luminosity;
-		  } else {
-			  averageTemperature = averageTemperature/countAverage;
-			  averageHumidity = averageHumidity/countAverage;
-			  averageLuminosity = averageLuminosity/countAverage;
-		  }
+//	      if(countAverage == 0) {
+//			  averageTemperature = temperature;
+//			  averageHumidity = humidity;
+//			  averageLuminosity = luminosity;
+//		  } else {
+//			  averageTemperature = averageTemperature/countAverage;
+//			  averageHumidity = averageHumidity/countAverage;
+//			  averageLuminosity = averageLuminosity/countAverage;
+//		  }
 	      sendDataToThingSpeak(THINGSPEAK_API_KEY, temperature, humidity, luminosity);
-		  averageTemperature = 0.0f;
-		  averageHumidity = 0.0f;
-		  averageLuminosity = 0.0f;
-		  countAverage = 0;
+	      tsStart = currentTick;	// empieza maquina de estados ThingSpeak
+//		  averageTemperature = 0.0f;
+//		  averageHumidity = 0.0f;
+//		  averageLuminosity = 0.0f;
+//		  countAverage = 0;
 
 	      activeTask = TASK_THINGSPEAK;
 	  }
 
 	  // Ejecutar la máquina que esté activa. Evita bloques en las máquinas de estado
 	  if (activeTask == TASK_THINGSPEAK) {
-	      if (thingSpeakState != 0 && tsStart == 0)		// Empieza maquina estados
-	    	  tsStart = HAL_GetTick();
+//	      if (thingSpeakState != 0 && tsStart == 0)		// Empieza maquina estados
+//	    	  tsStart = currentTick;
 
 	      processThingSpeakStateMachine();
 
@@ -220,21 +238,22 @@ int main(void)
 				  nextRpiSend += SEND_RASPBERRY_INTERVAL;
 				  lastRpiSend = nextRpiSend - SEND_RASPBERRY_INTERVAL;	// Actualiza el tiempo del ultimo envio (opcional)
 				  sendDataToRpi(temperature, humidity, luminosity);
+				  rpiStart = currentTick;			// Empieza maquina estados Rpi
 				  activeTask = TASK_RPI;
 	          }
 
-	      } else if ((HAL_GetTick() - tsStart) > ANTIBLOCK_STATE_MACHINE) {
+	      } else if ((currentTick - tsStart) > ANTIBLOCK_STATE_MACHINE) {
 	          alertaBloqueo = true;
 	      }
 
 	  } else if (activeTask == TASK_RPI) {
-	      if (rpiState != 0 && rpiStart == 0)		// Empieza maquina estados
-	          rpiStart = HAL_GetTick();
+//	      if (rpiState != 0 && rpiStart == 0)		// Empieza maquina estados
+//	          rpiStart = currentTick;
 
 	      processRpiStateMachine();
 
 	      if (rpiState == 0) {
-	          rpiStart = 0;
+	          rpiStart = 0;	// reiniciar si finaliza bien
 	          activeTask = TASK_IDLE;
 	      } else if ((HAL_GetTick() - rpiStart) > ANTIBLOCK_STATE_MACHINE) {
 	          alertaBloqueo = true;
@@ -260,6 +279,13 @@ int main(void)
 	      rpiStart = 0;
 	  }
 
+
+	  	  // Reset de Esp8266 cada hora
+	  if((currentTick - lastResetEsp8266 >= RESET_ESP_INTERVAL && firstReset == true) || (currentTick >= (RESET_ESP_INTERVAL + 10000) && firstReset == false)) {
+		  firstReset = true;
+		  lastResetEsp8266 = currentTick;
+		  ESP_Init("MOVISTAR_1DD2", "55253A2D16DDBF32D47B", "192.168.1.222");
+	  }
 
 
 
@@ -425,14 +451,28 @@ static void MX_USART6_UART_Init(void)
   */
 static void MX_GPIO_Init(void)
 {
+  GPIO_InitTypeDef GPIO_InitStruct = {0};
   /* USER CODE BEGIN MX_GPIO_Init_1 */
 
   /* USER CODE END MX_GPIO_Init_1 */
 
   /* GPIO Ports Clock Enable */
   __HAL_RCC_GPIOH_CLK_ENABLE();
-  __HAL_RCC_GPIOB_CLK_ENABLE();
   __HAL_RCC_GPIOC_CLK_ENABLE();
+  __HAL_RCC_GPIOB_CLK_ENABLE();
+
+  /*Configure GPIO pin Output Level */
+  HAL_GPIO_WritePin(GPIOC, GPIO_PIN_0|GPIO_PIN_1|GPIO_PIN_2|GPIO_PIN_3
+                          |GPIO_PIN_4|GPIO_PIN_5, GPIO_PIN_RESET);
+
+  /*Configure GPIO pins : PC0 PC1 PC2 PC3
+                           PC4 PC5 */
+  GPIO_InitStruct.Pin = GPIO_PIN_0|GPIO_PIN_1|GPIO_PIN_2|GPIO_PIN_3
+                          |GPIO_PIN_4|GPIO_PIN_5;
+  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+  HAL_GPIO_Init(GPIOC, &GPIO_InitStruct);
 
   /* USER CODE BEGIN MX_GPIO_Init_2 */
 

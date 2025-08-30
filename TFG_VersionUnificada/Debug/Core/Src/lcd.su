@@ -1,0 +1,12 @@
+../Core/Src/lcd.c:9:13:lcd_us	24	static,ignoring_inline_asm
+../Core/Src/lcd.c:14:13:lcd_pulseE	8	static
+../Core/Src/lcd.c:21:13:lcd_write4	16	static
+../Core/Src/lcd.c:29:6:LCD_Send	16	static
+../Core/Src/lcd.c:35:6:LCD_SendCommand	16	static
+../Core/Src/lcd.c:40:6:LCD_SendData	16	static
+../Core/Src/lcd.c:44:6:LCD_Clear	8	static
+../Core/Src/lcd.c:48:6:LCD_SetCursor	24	static
+../Core/Src/lcd.c:53:6:LCD_Print	16	static
+../Core/Src/lcd.c:57:6:LCD_Init	8	static
+../Core/Src/lcd.c:85:13:floatToStr	24	static
+../Core/Src/lcd.c:91:6:LCD_Update_Variables	40	static

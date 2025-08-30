@@ -71,7 +71,6 @@ void ESP_Init (char *SSID, char *PASSWD, char *STAIP)
 	  Uart_flush();
 	  Uart_sendstring("AT+CWJAP?\r\n");
 	  while (!(Wait_for("OK\r\n")));
-
 }
 
 

@@ -34,7 +34,13 @@ void processThingSpeakStateMachine() {	// Maneja el proceso de comunicación con
         case 2: {
         	Uart_flush();
         	Uart_sendstring("AT+CIPSTART=\"TCP\",\"api.thingspeak.com\",80\r\n");
-        	while (!(Wait_for("OK\r\n")));
+//        	while (!(Wait_for("OK\r\n")));
+        	if (!Wait_for("OK\r\n") && !Wait_for("CONNECT\r\n") && !Wait_for("CLOSED\r\n")) {
+
+				closeConnection();
+				thingSpeakState = 0;
+				break;
+			}
         	thingSpeakState = 3;
             break;
         }

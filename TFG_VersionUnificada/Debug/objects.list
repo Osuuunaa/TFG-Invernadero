@@ -1,5 +1,6 @@
 "./Core/Src/ESP_DATA_HANDLER.o"
 "./Core/Src/UartRingbuffer.o"
+"./Core/Src/lcd.o"
 "./Core/Src/main.o"
 "./Core/Src/mqtt_raspberry.o"
 "./Core/Src/sht85.o"

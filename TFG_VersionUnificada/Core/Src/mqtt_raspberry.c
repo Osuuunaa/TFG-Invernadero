@@ -213,7 +213,8 @@ void processRpiStateMachine(void) {
         sprintf(cmd, "AT+CIPSTART=\"TCP\",\"%s\",%d\r\n", MQTT_BROKER_IP, MQTT_BROKER_PORT);
         Uart_sendstring(cmd);
 
-        if (!Wait_for("OK\r\n")) {
+//        if (!Wait_for("OK\r\n")){
+        if (!Wait_for("OK\r\n") && !Wait_for("CLOSED\r\n")) {
         	closeConnection();
             rpiState = 0;
             break;
